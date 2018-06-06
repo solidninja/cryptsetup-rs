@@ -2,11 +2,9 @@
 
 extern crate cryptsetup_rs;
 extern crate env_logger;
+extern crate log;
 extern crate tempdir;
 extern crate uuid;
-
-#[macro_use]
-extern crate log;
 
 #[macro_use]
 extern crate expectest;

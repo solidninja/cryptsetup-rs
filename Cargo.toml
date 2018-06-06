@@ -1,10 +1,10 @@
 [package]
 name = "cryptsetup-rs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Vladimir Lushnikov <vladimir@solidninja.is>"]
 license = "LGPL-3.0"
 description = "Rust wrapper around the libcryptsetup library, allowing manipulation of LUKS devices in Linux"
-homepage = "https://github.com/solidninja/peroxide-cryptsetup"
+homepage = "https://github.com/solidninja/cryptsetup-rs"
 
 [lib]
 name = "cryptsetup_rs"
@@ -12,8 +12,8 @@ name = "cryptsetup_rs"
 [dependencies]
 libc = "0.2"
 errno = "0.2"
-uuid = "0.5"
-log = "0.3"
+uuid = { version = "0.6", features = ["v4"] }
+log = "0.4"
 
 [dependencies.libcryptsetup-sys]
 version = "0.1.0"

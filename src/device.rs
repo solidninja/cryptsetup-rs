@@ -180,9 +180,8 @@ impl CryptDevice {
         };
         let c_luks_params: *mut raw::crypt_params_luks1 = &mut luks_params;
         let c_luks_type = ffi::CString::new(raw::crypt_device_type::LUKS1.to_str()).unwrap();
+        let c_uuid_ptr = c_uuid.as_ref().map(|u| u.as_ptr()).unwrap_or(ptr::null());
         let res = unsafe {
-            let c_uuid_ptr = c_uuid.map(|u| u.as_ptr()).unwrap_or(ptr::null());
-
             raw::crypt_format(self.cd,
                               c_luks_type.as_ptr(),
                               c_cipher.as_ptr(),
