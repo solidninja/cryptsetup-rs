@@ -36,12 +36,12 @@ impl TestContext {
     fn new_crypt_device(&self) -> CryptDevice {
         let crypt_file = self.dir.path().join(format!("{}.image", self.name));
         let dd_status = Command::new("dd")
-                            .arg("if=/dev/zero")
-                            .arg(format!("of={}", crypt_file.display()))
-                            .arg("bs=1M")
-                            .arg("count=10")
-                            .status()
-                            .unwrap();
+            .arg("if=/dev/zero")
+            .arg(format!("of={}", crypt_file.display()))
+            .arg("bs=1M")
+            .arg("count=10")
+            .status()
+            .unwrap();
         if !dd_status.success() {
             panic!("Failed to create disk image at {}", crypt_file.display());
         }

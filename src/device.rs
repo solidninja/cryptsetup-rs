@@ -1,18 +1,18 @@
-use std::ffi;
-use std::ptr;
-use std::mem;
-use std::str::FromStr;
-use std::str;
-use std::hash::{Hash, Hasher};
 use std::cmp::PartialEq;
-use std::path::PathBuf;
+use std::ffi;
 use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::mem;
+use std::path::PathBuf;
+use std::ptr;
 use std::result;
+use std::str;
+use std::str::FromStr;
 
 use errno;
-use uuid;
 use libc;
 use raw;
+use uuid;
 
 pub type Error = errno::Errno;
 pub type Result<T> = result::Result<T, Error>;
@@ -34,28 +34,34 @@ unsafe fn str_from_c_str<'a>(c_str: *const libc::c_char) -> Option<&'a str> {
 }
 
 macro_rules! crypt_error {
-    ( $res:expr ) => { Err(errno::Errno(-$res)) };
+    ($res:expr) => {
+        Err(errno::Errno(-$res))
+    };
 }
 
 macro_rules! check_crypt_error {
-	($res:expr) => {
-		if $res != 0 {
-			crypt_error!($res)
-		} else {
-			Ok(())
-		}
-	}
+    ($res:expr) => {
+        if $res != 0 {
+            crypt_error!($res)
+        } else {
+            Ok(())
+        }
+    };
 }
 
 #[allow(unused)]
 #[no_mangle]
-pub extern "C" fn cryptsetup_rs_log_callback(level: raw::crypt_log_level, message: *const libc::c_char, usrptr: *mut libc::c_void) {
+pub extern "C" fn cryptsetup_rs_log_callback(
+    level: raw::crypt_log_level,
+    message: *const libc::c_char,
+    usrptr: *mut libc::c_void,
+) {
     let msg = unsafe { str_from_c_str(message) }.unwrap();
     match level {
         raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg),
         raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg),
         raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg),			
+        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg),
     }
 }
 
@@ -69,10 +75,12 @@ pub struct CryptDevice {
 
 impl fmt::Debug for CryptDevice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "CryptDevice(path={}, raw={:p})",
-               self.path.display(),
-               self.cd)
+        write!(
+            f,
+            "CryptDevice(path={}, raw={:p})",
+            self.path.display(),
+            self.cd
+        )
     }
 }
 
@@ -81,7 +89,8 @@ impl CryptDevice {
         let mut cd: *mut raw::crypt_device = ptr::null_mut();
         let c_path = ffi::CString::new(path.to_str().unwrap()).unwrap();
 
-        let res = unsafe { raw::crypt_init(&mut cd as *mut *mut raw::crypt_device, c_path.as_ptr()) };
+        let res =
+            unsafe { raw::crypt_init(&mut cd as *mut *mut raw::crypt_device, c_path.as_ptr()) };
 
         if res != 0 {
             crypt_error!(res)
@@ -89,10 +98,7 @@ impl CryptDevice {
             unsafe {
                 raw::crypt_set_log_callback(cd, Some(cryptsetup_rs_log_callback), ptr::null_mut());
             }
-            let cd = CryptDevice {
-                path: path,
-                cd: cd,
-            };
+            let cd = CryptDevice { path: path, cd: cd };
             Ok(cd)
         }
     }
@@ -161,17 +167,19 @@ impl CryptDevice {
         check_crypt_error!(res)
     }
 
-    pub fn format_luks(&mut self,
-                       cipher: &str,
-                       cipher_mode: &str,
-                       hash: &str,
-                       mk_bits: usize,
-                       maybe_uuid: Option<&uuid::Uuid>)
-                       -> Result<()> {
+    pub fn format_luks(
+        &mut self,
+        cipher: &str,
+        cipher_mode: &str,
+        hash: &str,
+        mk_bits: usize,
+        maybe_uuid: Option<&uuid::Uuid>,
+    ) -> Result<()> {
         let c_cipher = ffi::CString::new(cipher).unwrap();
         let c_cipher_mode = ffi::CString::new(cipher_mode).unwrap();
         let c_hash = ffi::CString::new(hash).unwrap();
-        let c_uuid = maybe_uuid.map(|uuid| ffi::CString::new(uuid.hyphenated().to_string()).unwrap());
+        let c_uuid =
+            maybe_uuid.map(|uuid| ffi::CString::new(uuid.hyphenated().to_string()).unwrap());
 
         let mut luks_params = raw::crypt_params_luks1 {
             hash: c_hash.as_ptr(),
@@ -182,14 +190,16 @@ impl CryptDevice {
         let c_luks_type = ffi::CString::new(raw::crypt_device_type::LUKS1.to_str()).unwrap();
         let c_uuid_ptr = c_uuid.as_ref().map(|u| u.as_ptr()).unwrap_or(ptr::null());
         let res = unsafe {
-            raw::crypt_format(self.cd,
-                              c_luks_type.as_ptr(),
-                              c_cipher.as_ptr(),
-                              c_cipher_mode.as_ptr(),
-                              c_uuid_ptr,
-                              ptr::null(),
-                              mk_bits / 8,
-                              c_luks_params as *mut libc::c_void)
+            raw::crypt_format(
+                self.cd,
+                c_luks_type.as_ptr(),
+                c_cipher.as_ptr(),
+                c_cipher_mode.as_ptr(),
+                c_uuid_ptr,
+                ptr::null(),
+                mk_bits / 8,
+                c_luks_params as *mut libc::c_void,
+            )
         };
 
         check_crypt_error!(res)
@@ -202,31 +212,42 @@ impl CryptDevice {
         }
     }
 
-    pub fn add_keyslot(&mut self, key: &[u8], maybe_prev_key: Option<&[u8]>, maybe_keyslot: Option<Keyslot>) -> Result<Keyslot> {
+    pub fn add_keyslot(
+        &mut self,
+        key: &[u8],
+        maybe_prev_key: Option<&[u8]>,
+        maybe_keyslot: Option<Keyslot>,
+    ) -> Result<Keyslot> {
         let c_key_len = key.len() as libc::size_t;
         let c_key = unsafe { ffi::CString::from_vec_unchecked(key.to_owned()) };
-        let c_keyslot = maybe_keyslot.map(|k| k as libc::c_int).unwrap_or(ANY_KEYSLOT as libc::c_int);
+        let c_keyslot = maybe_keyslot
+            .map(|k| k as libc::c_int)
+            .unwrap_or(ANY_KEYSLOT as libc::c_int);
 
         let res = if let Some(prev_key) = maybe_prev_key {
             let c_prev_key_len = prev_key.len() as libc::size_t;
             let c_prev_key = unsafe { ffi::CString::from_vec_unchecked(prev_key.to_owned()) };
 
             unsafe {
-                raw::crypt_keyslot_add_by_passphrase(self.cd,
-                                                     c_keyslot,
-                                                     c_prev_key.as_ptr(),
-                                                     c_prev_key_len,
-                                                     c_key.as_ptr(),
-                                                     c_key_len)
+                raw::crypt_keyslot_add_by_passphrase(
+                    self.cd,
+                    c_keyslot,
+                    c_prev_key.as_ptr(),
+                    c_prev_key_len,
+                    c_key.as_ptr(),
+                    c_key_len,
+                )
             }
         } else {
             unsafe {
-                raw::crypt_keyslot_add_by_volume_key(self.cd,
-                                                     c_keyslot,
-                                                     ptr::null(),
-                                                     0 as libc::size_t,
-                                                     c_key.as_ptr(),
-                                                     c_key_len)
+                raw::crypt_keyslot_add_by_volume_key(
+                    self.cd,
+                    c_keyslot,
+                    ptr::null(),
+                    0 as libc::size_t,
+                    c_key.as_ptr(),
+                    c_key_len,
+                )
             }
         };
 
@@ -243,12 +264,14 @@ impl CryptDevice {
 
         let res = unsafe {
             let c_passphrase = ffi::CString::from_vec_unchecked(key.to_owned());
-            raw::crypt_activate_by_passphrase(self.cd,
-                                              c_name.as_ptr(),
-                                              ANY_KEYSLOT,
-                                              c_passphrase.as_ptr(),
-                                              c_passphrase_len,
-                                              0u32)
+            raw::crypt_activate_by_passphrase(
+                self.cd,
+                c_name.as_ptr(),
+                ANY_KEYSLOT,
+                c_passphrase.as_ptr(),
+                c_passphrase_len,
+                0u32,
+            )
         };
 
         if res < 0 {
@@ -270,7 +293,8 @@ impl Drop for CryptDevice {
 
 impl Hash for CryptDevice {
     fn hash<H>(&self, state: &mut H)
-        where H: Hasher
+    where
+        H: Hasher,
     {
         self.path.hash(state)
     }
