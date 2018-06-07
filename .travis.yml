@@ -10,6 +10,9 @@ sudo: required
 dist: trusty
 os:
   - linux
+script:
+  - cargo build --verbose
+  - sudo /bin/sh -c "PATH=/home/travis/.cargo/bin:$PATH LD_LIBRARY_PATH=/home/travis/.cargo/lib cargo test --verbose"
 addons:
   apt:
     packages:
