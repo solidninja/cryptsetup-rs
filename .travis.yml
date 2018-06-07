@@ -6,6 +6,7 @@ rust:
 matrix:
   allow_failures:
     - rust: nightly
+sudo: required
 dist: trusty
 os:
   - linux
