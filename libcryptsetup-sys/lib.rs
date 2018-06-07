@@ -117,6 +117,9 @@ pub enum crypt_activation_flag {
     CRYPT_ACTIVATE_CORRUPTED = (1 << 5),
     CRYPT_ACTIVATE_SAME_CPU_CRYPT = (1 << 6),
     CRYPT_ACTIVATE_SUBMIT_FROM_CRYPT_CPUS = (1 << 7),
+    CRYPT_ACTIVATE_IGNORE_CORRUPTION = (1 << 8),
+    CRYPT_ACTIVATE_RESTART_ON_CORRUPTION = (1 << 9),
+    CRYPT_ACTIVATE_IGNORE_ZERO_BLOCKS = (1 << 10),
 }
 
 #[repr(C)]
@@ -161,10 +164,14 @@ extern "C" {
     pub fn crypt_log(cd: *mut crypt_device, level: crypt_log_level, msg: *const c_char);
 
     pub fn crypt_set_confirm_callback(cd: *mut crypt_device, confirm: crypt_confirm_cb, usrptr: *mut c_void);
+    #[deprecated]
     pub fn crypt_set_password_callback(cd: *mut crypt_device, password: crypt_password_cb, usrptr: *mut c_void);
+    #[deprecated]
     pub fn crypt_set_timeout(cd: *mut crypt_device, timeout: u64);
+    #[deprecated]
     pub fn crypt_set_password_retry(cd: *mut crypt_device, tries: c_int);
     pub fn crypt_set_iteration_time(cd: *mut crypt_device, iteration_time_ms: u64);
+    #[deprecated]
     pub fn crypt_set_password_verify(cd: *mut crypt_device, password_verify: c_int);
     pub fn crypt_set_data_device(cd: *mut crypt_device, device: *const c_char) -> c_int;
 
@@ -346,7 +353,9 @@ extern "C" {
     pub fn crypt_header_backup(cd: *mut crypt_device, requested_type: *const c_char, backup_file: *const c_char) -> c_int;
     pub fn crypt_header_restore(cd: *mut crypt_device, requested_type: *const c_char, backup_file: *const c_char) -> c_int;
 
+    #[deprecated]
     pub fn crypt_last_error(cd: *mut crypt_device, buf: *mut c_char, size: size_t);
+    #[deprecated]
     pub fn crypt_get_error(buf: *mut c_char, size: size_t);
 
     pub fn crypt_get_dir() -> *const c_char;

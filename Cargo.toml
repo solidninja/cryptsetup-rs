@@ -16,7 +16,7 @@ uuid = { version = "0.6", features = ["v4"] }
 log = "0.4"
 
 [dependencies.libcryptsetup-sys]
-version = "0.1.0"
+version = "0.1.1"
 path = "libcryptsetup-sys"
 
 [dependencies.blkid-rs]
