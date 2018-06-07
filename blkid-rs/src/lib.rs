@@ -77,7 +77,7 @@ impl convert::From<byteorder::Error> for Error {
 }
 */
 
-mod raw {
+pub mod raw {
     #![allow(non_snake_case)]
 
     use std::convert::From;

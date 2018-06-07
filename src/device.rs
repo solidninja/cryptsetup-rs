@@ -3,27 +3,49 @@ use std::ffi;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem;
-use std::path::PathBuf;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::result;
 use std::str;
 use std::str::FromStr;
 
+use blkid_rs;
+use blkid_rs::LuksHeader;
 use errno;
 use libc;
 use raw;
 use uuid;
 
-pub type Error = errno::Errno;
+#[derive(Debug)]
+pub enum Error {
+    CryptsetupError(errno::Errno),
+    IOError(::std::io::Error),
+    BlkidError(blkid_rs::Error)
+}
+
+impl From<::std::io::Error> for Error {
+    fn from(e: ::std::io::Error) -> Self {
+        Error::IOError(e)
+    }
+}
+
+impl From<blkid_rs::Error> for Error {
+    fn from(e: blkid_rs::Error) -> Self {
+        Error::BlkidError(e)
+    }
+}
+
 pub type Result<T> = result::Result<T, Error>;
 pub type Keyslot = u8;
 
-pub use raw::{crypt_device_type, crypt_rng_type};
+pub use raw::{crypt_device_type, crypt_rng_type, crypt_keyslot_info};
 
 // TODO - each time .to_owned() is called, need to manually zero the memory afterwards
 
 const ANY_KEYSLOT: libc::c_int = -1 as libc::c_int;
 
+// FIXME: remove as you can just use CStr::to_str() ?
 unsafe fn str_from_c_str<'a>(c_str: *const libc::c_char) -> Option<&'a str> {
     if c_str.is_null() {
         None
@@ -35,7 +57,7 @@ unsafe fn str_from_c_str<'a>(c_str: *const libc::c_char) -> Option<&'a str> {
 
 macro_rules! crypt_error {
     ($res:expr) => {
-        Err(errno::Errno(-$res))
+        Err(Error::CryptsetupError(errno::Errno(-$res)))
     };
 }
 
@@ -73,6 +95,39 @@ pub struct CryptDevice {
     cd: *mut raw::crypt_device,
 }
 
+// TODO: decide whether to load all of these at once or read every time
+
+/// Parameters for LUKS1 devices
+pub struct Luks1Params {
+    pub hash_spec: String,
+    pub payload_offset: u32,
+    pub mk_bits: u32,
+    pub mk_digest: [u8; 20],
+    pub mk_salt: [u8; 32],
+    pub mk_iterations: u32,
+}
+
+impl Luks1Params {
+    pub fn from(header: impl LuksHeader) -> Result<Luks1Params> {
+        let hash_spec = header.hash_spec()?.to_owned();
+        let payload_offset = header.payload_offset();
+        let mk_bits = header.key_bytes() * 8;
+        let mut mk_digest = [0u8; 20];
+        mk_digest.copy_from_slice(header.mk_digest());
+        let mut mk_salt = [0u8; 32];
+        mk_salt.copy_from_slice(header.mk_digest_salt());
+        let mk_iterations = header.mk_digest_iterations();
+        Ok(Luks1Params {
+            hash_spec,
+            payload_offset,
+            mk_bits,
+            mk_digest,
+            mk_salt,
+            mk_iterations
+        })
+    }
+}
+
 impl fmt::Debug for CryptDevice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -85,7 +140,8 @@ impl fmt::Debug for CryptDevice {
 }
 
 impl CryptDevice {
-    pub fn new(path: PathBuf) -> Result<CryptDevice> {
+    pub fn new<P: Into<PathBuf>>(p: P) -> Result<CryptDevice> {
+        let path = p.into();
         let mut cd: *mut raw::crypt_device = ptr::null_mut();
         let c_path = ffi::CString::new(path.to_str().unwrap()).unwrap();
 
@@ -98,8 +154,7 @@ impl CryptDevice {
             unsafe {
                 raw::crypt_set_log_callback(cd, Some(cryptsetup_rs_log_callback), ptr::null_mut());
             }
-            let cd = CryptDevice { path: path, cd: cd };
-            Ok(cd)
+            Ok(CryptDevice { path, cd })
         }
     }
 
@@ -119,6 +174,34 @@ impl CryptDevice {
         check_crypt_error!(res)
     }
 
+    // NOTE: the additional param structs are only applicable to tcrypt and verity types,
+    // also `lib/setup.c:crypt_load()` does not allow loading LUKS1 header information
+    fn _load_struct<S>(&self, requested_type: raw::crypt_device_type, s: &mut S) -> Result<()> {
+        let c_type = ffi::CString::new(requested_type.to_str()).unwrap();
+        let c_struct_ref = s as *mut S;
+
+        let res = unsafe { raw::crypt_load(self.cd, c_type.as_ptr(), c_struct_ref as *mut libc::c_void) };
+        check_crypt_error!(res)
+    }
+
+    /// Loads a LUKS v1 device from the specified path
+    pub fn load_luks1<P: AsRef<Path>>(p: P) -> Result<(CryptDevice, Luks1Params)> {
+        let crypt_device = CryptDevice::new(p.as_ref())?;
+
+        crypt_device.load(raw::crypt_device_type::LUKS1)?;
+        let device_file = File::open(p)?;
+        let luks_phdr = blkid_rs::BlockDevice::read_luks_header(device_file)?;
+
+        let device_type = crypt_device.device_type();
+        if let Some(raw::crypt_device_type::LUKS1) = device_type {
+            let params = Luks1Params::from(luks_phdr)?;
+            Ok((crypt_device, params))
+        } else {
+            error!("Unexpected device type: {:?}", device_type);
+            crypt_error!(42)
+        }
+    }
+
     pub fn rng_type(&self) -> raw::crypt_rng_type {
         unsafe {
             let res = raw::crypt_get_rng_type(self.cd);
@@ -133,6 +216,12 @@ impl CryptDevice {
     pub fn device_type(&self) -> Option<raw::crypt_device_type> {
         let res = unsafe { str_from_c_str(raw::crypt_get_type(self.cd)) };
         res.map(|res_str| raw::crypt_device_type::from_str(res_str).unwrap())
+    }
+
+    pub fn keyslot_status(&self, slot: Keyslot) -> raw::crypt_keyslot_info {
+        unsafe {
+            raw::crypt_keyslot_status(self.cd, slot as libc::c_int)
+        }
     }
 
     pub fn uuid(&self) -> Option<uuid::Uuid> {

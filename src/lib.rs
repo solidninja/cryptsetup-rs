@@ -10,5 +10,6 @@ extern crate uuid;
 extern crate log;
 
 pub mod device;
+pub use device::{CryptDevice, Error, Result, Keyslot};
 
 pub use blkid_rs::{BlockDevice, LuksHeader};

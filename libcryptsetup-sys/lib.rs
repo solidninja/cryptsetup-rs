@@ -344,7 +344,7 @@ extern "C" {
                                iterations_sec: *mut u64)
                                -> c_int;
 
-    pub fn crypt_keyslot_get_status(cd: *mut crypt_device, keyslot: c_int) -> crypt_keyslot_info;
+    pub fn crypt_keyslot_status(cd: *mut crypt_device, keyslot: c_int) -> crypt_keyslot_info;
 
     pub fn crypt_keyslot_max(crypt_device_type: *const c_char) -> c_int;
 
