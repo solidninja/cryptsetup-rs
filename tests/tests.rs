@@ -15,7 +15,7 @@ use expectest::prelude::*;
 use tempdir::TempDir;
 use uuid::Uuid;
 
-use cryptsetup_rs::device::*;
+use cryptsetup_rs::*;
 
 struct TestContext {
     dir: TempDir,
@@ -25,15 +25,12 @@ struct TestContext {
 impl TestContext {
     fn new(name: String) -> TestContext {
         env_logger::init().unwrap();
-        CryptDevice::enable_debug(true);
+        cryptsetup_rs::enable_debug(true);
         let dir = tempdir::TempDir::new(&name).unwrap();
-        TestContext {
-            name: name,
-            dir: dir,
-        }
+        TestContext { name, dir }
     }
 
-    fn new_crypt_device(&self) -> CryptDevice {
+    fn new_crypt_device(&self) -> api::CryptDeviceFormatBuilder {
         let crypt_file = self.dir.path().join(format!("{}.image", self.name));
         let dd_status = Command::new("dd")
             .arg("if=/dev/zero")
@@ -46,28 +43,30 @@ impl TestContext {
             panic!("Failed to create disk image at {}", crypt_file.display());
         }
 
-        let mut device = CryptDevice::new(crypt_file).unwrap();
-        // use speedy rng
-        device.set_rng_type(crypt_rng_type::CRYPT_RNG_URANDOM);
-        device
+        cryptsetup_rs::format(crypt_file)
+            .unwrap()
+            .set_rng_type(crypt_rng_type::CRYPT_RNG_URANDOM)
     }
 }
 
 #[test]
-fn test_create_new_luks_cryptdevice_no_errors() {
-    let ctx = TestContext::new("new_luks_cryptdevice".to_string());
-    let mut cd = ctx.new_crypt_device();
+fn test_create_new_luks1_cryptdevice_no_errors() {
+    let ctx = TestContext::new("new_luks1_cryptdevice".to_string());
     let uuid = Uuid::new_v4();
 
-    cd.set_iteration_time(42);
-    expect!(cd.format_luks("aes", "xts-plain", "sha256", 256, Some(&uuid))).to(be_ok());
-    expect!(cd.dump()).to(be_ok());
+    let device_format = ctx.new_crypt_device().set_iteration_time(42);
 
-    expect!(cd.uuid()).to(be_some().value(uuid));
-    expect!(cd.device_type()).to(be_some().value(crypt_device_type::LUKS1));
-    expect!(cd.cipher()).to(be_some().value("aes"));
-    expect!(cd.cipher_mode()).to(be_some().value("xts-plain"));
-    expect!(cd.volume_key_size()).to(be_some().value(32));
+    let mut dev = device_format
+        .luks1("aes", "xts-plain", "sha256", 256, Some(&uuid))
+        .expect("LUKS format should succeed");
 
-    expect!(cd.add_keyslot(b"hello\0 world", None, Some(3))).to(be_ok().value(3));
+    dev.dump();
+
+    expect!(dev.uuid()).to(be_equal_to(uuid));
+    expect!(dev.device_type()).to(be_equal_to(crypt_device_type::LUKS1));
+    expect!(dev.cipher()).to(be_equal_to("aes"));
+    expect!(dev.cipher_mode()).to(be_equal_to("xts-plain"));
+    expect!(dev.volume_key_size()).to(be_equal_to(32));
+
+    expect!(dev.add_keyslot(b"hello world", None, Some(3))).to(be_ok().value(3));
 }

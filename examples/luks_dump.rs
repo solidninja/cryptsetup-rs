@@ -1,18 +1,18 @@
 #![deny(warnings)]
 #[warn(unused_must_use)]
-
 extern crate cryptsetup_rs;
 extern crate env_logger;
 
+use cryptsetup_rs::*;
 use std::env;
-use cryptsetup_rs::{CryptDevice, Result, Keyslot};
-use cryptsetup_rs::device::crypt_keyslot_info;
 
-fn _dump_slot(crypt_device: &CryptDevice, slot: Keyslot) -> Result<()> {
+fn dump_slot(crypt_device: &Luks1CryptDevice, slot: Keyslot) -> Result<()> {
     let status = match crypt_device.keyslot_status(slot) {
         crypt_keyslot_info::CRYPT_SLOT_INVALID => "INVALID",
         crypt_keyslot_info::CRYPT_SLOT_INACTIVE => "DISABLED",
-        crypt_keyslot_info::CRYPT_SLOT_ACTIVE | crypt_keyslot_info::CRYPT_SLOT_ACTIVE_LAST => "ENABLED",
+        crypt_keyslot_info::CRYPT_SLOT_ACTIVE | crypt_keyslot_info::CRYPT_SLOT_ACTIVE_LAST => {
+            "ENABLED"
+        }
     };
 
     println!("Key Slot {}: {}", slot, status);
@@ -25,43 +25,42 @@ fn _dump_slot(crypt_device: &CryptDevice, slot: Keyslot) -> Result<()> {
 
 fn dump(device_path: &str) -> Result<()> {
     // TODO: refactor API so each device type has only the methods it needs
-    let (crypt_device, luks1_params) = CryptDevice::load_luks1(device_path)?;
+    let dev = api::open(device_path)?.luks1()?;
 
-    println!("LUKS header information for {}", device_path);
+    println!("LUKS header information for {}", dev.device_name());
     println!();
     println!("{:<16}{}", "Version:", "1");
-    println!("{:<16}{}", "Cipher name:", crypt_device.cipher().unwrap());
-    println!("{:<16}{}", "Cipher mode:", crypt_device.cipher_mode().unwrap());
-    println!("{:<16}{}", "Hash spec:", &luks1_params.hash_spec);
-    println!("{:<16}{}", "Payload offset:", &luks1_params.payload_offset);
-    println!("{:<16}{}", "MK bits:", &luks1_params.mk_bits);
+    println!("{:<16}{}", "Cipher name:", dev.cipher());
+    println!("{:<16}{}", "Cipher mode:", dev.cipher_mode());
+    println!("{:<16}{}", "Hash spec:", dev.hash_spec());
+    println!("{:<16}{}", "Payload offset:", dev.payload_offset());
+    println!("{:<16}{}", "MK bits:", dev.mk_bits());
 
     print!("{:<16}", "MK digest:");
-    for b in luks1_params.mk_digest.iter() {
+    for b in dev.mk_digest().iter() {
         print!("{:x} ", b);
     }
     println!();
 
-    let salt_h1 = &luks1_params.mk_salt[0..16];
-    let salt_h2 = &luks1_params.mk_salt[16..];
+    let salt = dev.mk_salt();
     print!("{:<16}", "MK salt:");
-    for b in salt_h1.iter() {
+    for b in salt[0..16].iter() {
         print!("{:x} ", b);
     }
     println!();
     print!("{:<16}", "");
-    for b in salt_h2.iter() {
+    for b in salt[16..32].iter() {
         print!("{:x} ", b);
     }
     println!();
 
-    println!("{:<16}{}", "MK iterations:", &luks1_params.mk_iterations);
-    println!("{:<16}{}", "UUID:", crypt_device.uuid().expect("LUKS1 UUID"));
+    println!("{:<16}{}", "MK iterations:", dev.mk_iterations());
+    println!("{:<16}{}", "UUID:", dev.uuid());
 
     println!();
 
     for slot in 0..8 {
-        _dump_slot(&crypt_device, slot)?;
+        dump_slot(&dev, slot)?;
     }
 
     Ok(())

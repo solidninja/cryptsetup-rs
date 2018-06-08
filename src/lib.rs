@@ -9,7 +9,9 @@ extern crate uuid;
 #[macro_use]
 extern crate log;
 
+pub mod api;
 pub mod device;
-pub use device::{CryptDevice, Error, Result, Keyslot};
 
-pub use blkid_rs::{BlockDevice, LuksHeader};
+pub use api::{enable_debug, format, open};
+pub use api::{CryptDevice, CryptDeviceType, Error, Keyslot, Luks1CryptDevice, Result};
+pub use raw::{crypt_device_type, crypt_keyslot_info, crypt_rng_type};
