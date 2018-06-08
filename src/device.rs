@@ -11,6 +11,7 @@ use libc;
 use raw;
 use uuid;
 
+/// Raw pointer to the underlying `crypt_device` opaque struct
 pub type RawDevice = *mut raw::crypt_device;
 
 #[derive(Debug)]

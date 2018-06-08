@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 extern crate libc;
 
-use libc::{c_int, c_char, c_uint, size_t, c_void, c_double};
+use libc::{c_char, c_double, c_int, c_uint, c_void, size_t};
 use std::str::FromStr;
 
 pub enum crypt_device {}
@@ -18,7 +18,8 @@ pub enum crypt_log_level {
 
 pub type crypt_log_cb = extern "C" fn(crypt_log_level, *const c_char, *mut c_void);
 pub type crypt_confirm_cb = extern "C" fn(*const c_char, *mut c_void) -> c_int;
-pub type crypt_password_cb = extern "C" fn(*const c_char, *mut c_char, size_t, *mut c_void) -> c_int;
+pub type crypt_password_cb =
+    extern "C" fn(*const c_char, *mut c_char, size_t, *mut c_void) -> c_int;
 
 #[repr(i32)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -157,15 +158,31 @@ pub enum crypt_debug_level {
 
 extern "C" {
     pub fn crypt_init(cd: *mut *mut crypt_device, device: *const c_char) -> c_int;
-    pub fn crypt_init_by_name_and_header(cd: *mut *mut crypt_device, name: *const c_char, header_device: *const c_char) -> c_int;
+    pub fn crypt_init_by_name_and_header(
+        cd: *mut *mut crypt_device,
+        name: *const c_char,
+        header_device: *const c_char,
+    ) -> c_int;
     pub fn crypt_init_by_name(cd: *mut *mut crypt_device, name: *const c_char) -> c_int;
 
-    pub fn crypt_set_log_callback(cd: *mut crypt_device, log: Option<crypt_log_cb>, usrptr: *mut c_void);
+    pub fn crypt_set_log_callback(
+        cd: *mut crypt_device,
+        log: Option<crypt_log_cb>,
+        usrptr: *mut c_void,
+    );
     pub fn crypt_log(cd: *mut crypt_device, level: crypt_log_level, msg: *const c_char);
 
-    pub fn crypt_set_confirm_callback(cd: *mut crypt_device, confirm: crypt_confirm_cb, usrptr: *mut c_void);
+    pub fn crypt_set_confirm_callback(
+        cd: *mut crypt_device,
+        confirm: crypt_confirm_cb,
+        usrptr: *mut c_void,
+    );
     #[deprecated]
-    pub fn crypt_set_password_callback(cd: *mut crypt_device, password: crypt_password_cb, usrptr: *mut c_void);
+    pub fn crypt_set_password_callback(
+        cd: *mut crypt_device,
+        password: crypt_password_cb,
+        usrptr: *mut c_void,
+    );
     #[deprecated]
     pub fn crypt_set_timeout(cd: *mut crypt_device, timeout: u64);
     #[deprecated]
@@ -182,135 +199,165 @@ extern "C" {
 
     pub fn crypt_get_type(cd: *mut crypt_device) -> *const c_char;
 
-    pub fn crypt_format(cd: *mut crypt_device,
-                        crypt_type: *const c_char,
-                        cipher: *const c_char,
-                        cipher_mode: *const c_char,
-                        uuid: *const c_char,
-                        volume_key: *const c_char,
-                        volume_key_size: size_t,
-                        params: *mut c_void)
-                        -> c_int;
+    pub fn crypt_format(
+        cd: *mut crypt_device,
+        crypt_type: *const c_char,
+        cipher: *const c_char,
+        cipher_mode: *const c_char,
+        uuid: *const c_char,
+        volume_key: *const c_char,
+        volume_key_size: size_t,
+        params: *mut c_void,
+    ) -> c_int;
 
     pub fn crypt_set_uuid(cd: *mut crypt_device, uuid: *const c_char) -> c_int;
 
-    pub fn crypt_load(cd: *mut crypt_device, requested_type: *const c_char, params: *mut c_void) -> c_int;
+    pub fn crypt_load(
+        cd: *mut crypt_device,
+        requested_type: *const c_char,
+        params: *mut c_void,
+    ) -> c_int;
 
-    pub fn crypt_repair(cd: *mut crypt_device, requested_type: *const c_char, params: *mut c_void) -> c_int;
+    pub fn crypt_repair(
+        cd: *mut crypt_device,
+        requested_type: *const c_char,
+        params: *mut c_void,
+    ) -> c_int;
 
     pub fn crypt_resize(cd: *mut crypt_device, name: *const c_char, new_size: u64) -> c_int;
 
     pub fn crypt_suspend(cd: *mut crypt_device, name: *const c_char) -> c_int;
 
-    pub fn crypt_resume_by_passphrase(cd: *mut crypt_device,
-                                      name: *const c_char,
-                                      keyslot: c_int,
-                                      passphrase: *const c_char,
-                                      passphrase_size: size_t)
-                                      -> c_int;
-    pub fn crypt_resume_by_keyfile_offset(cd: *mut crypt_device,
-                                          name: *const c_char,
-                                          keyslot: c_int,
-                                          keyfile: *const c_char,
-                                          keyfile_size: size_t,
-                                          keyfile_offset: size_t)
-                                          -> c_int;
-    pub fn crypt_resume_by_keyfile(cd: *mut crypt_device,
-                                   name: *const c_char,
-                                   keyslot: c_int,
-                                   keyfile: *const c_char,
-                                   keyfile_size: size_t)
-                                   -> c_int;
+    pub fn crypt_resume_by_passphrase(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        keyslot: c_int,
+        passphrase: *const c_char,
+        passphrase_size: size_t,
+    ) -> c_int;
+    pub fn crypt_resume_by_keyfile_offset(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        keyslot: c_int,
+        keyfile: *const c_char,
+        keyfile_size: size_t,
+        keyfile_offset: size_t,
+    ) -> c_int;
+    pub fn crypt_resume_by_keyfile(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        keyslot: c_int,
+        keyfile: *const c_char,
+        keyfile_size: size_t,
+    ) -> c_int;
 
     pub fn crypt_free(cd: *mut crypt_device);
 
-    pub fn crypt_keyslot_add_by_passphrase(cd: *mut crypt_device,
-                                           keyslot: c_int,
-                                           passphrase: *const c_char,
-                                           passphrase_size: size_t,
-                                           new_passphrase: *const c_char,
-                                           new_passphrase_size: size_t)
-                                           -> c_int;
-    pub fn crypt_keyslot_change_by_passphrase(cd: *mut crypt_device,
-                                              keyslot_old: c_int,
-                                              keyslot_new: c_int,
-                                              passphrase: *const c_char,
-                                              passphrase_size: size_t,
-                                              new_passphrase: *const c_char,
-                                              new_passphrase_size: size_t)
-                                              -> c_int;
+    pub fn crypt_keyslot_add_by_passphrase(
+        cd: *mut crypt_device,
+        keyslot: c_int,
+        passphrase: *const c_char,
+        passphrase_size: size_t,
+        new_passphrase: *const c_char,
+        new_passphrase_size: size_t,
+    ) -> c_int;
+    pub fn crypt_keyslot_change_by_passphrase(
+        cd: *mut crypt_device,
+        keyslot_old: c_int,
+        keyslot_new: c_int,
+        passphrase: *const c_char,
+        passphrase_size: size_t,
+        new_passphrase: *const c_char,
+        new_passphrase_size: size_t,
+    ) -> c_int;
 
-    pub fn crypt_keyslot_add_by_keyfile_offset(cd: *mut crypt_device,
-                                               keyslot: c_int,
-                                               keyfile: *const c_char,
-                                               keyfile_size: size_t,
-                                               keyfile_offset: size_t,
-                                               new_keyfile: *const c_char,
-                                               new_keyfile_size: size_t,
-                                               new_keyfile_offset: size_t)
-                                               -> c_int;
-    pub fn crypt_keyslot_add_by_keyfile(cd: *mut crypt_device,
-                                        keyslot: c_int,
-                                        keyfile: *const c_char,
-                                        keyfile_size: size_t,
-                                        new_keyfile: *const c_char,
-                                        new_keyfile_size: size_t)
-                                        -> c_int;
+    pub fn crypt_keyslot_add_by_keyfile_offset(
+        cd: *mut crypt_device,
+        keyslot: c_int,
+        keyfile: *const c_char,
+        keyfile_size: size_t,
+        keyfile_offset: size_t,
+        new_keyfile: *const c_char,
+        new_keyfile_size: size_t,
+        new_keyfile_offset: size_t,
+    ) -> c_int;
+    pub fn crypt_keyslot_add_by_keyfile(
+        cd: *mut crypt_device,
+        keyslot: c_int,
+        keyfile: *const c_char,
+        keyfile_size: size_t,
+        new_keyfile: *const c_char,
+        new_keyfile_size: size_t,
+    ) -> c_int;
 
-    pub fn crypt_keyslot_add_by_volume_key(cd: *mut crypt_device,
-                                           keyslot: c_int,
-                                           volume_key: *const c_char,
-                                           volume_key_size: size_t,
-                                           passphrase: *const c_char,
-                                           passphrase_size: size_t)
-                                           -> c_int;
+    pub fn crypt_keyslot_add_by_volume_key(
+        cd: *mut crypt_device,
+        keyslot: c_int,
+        volume_key: *const c_char,
+        volume_key_size: size_t,
+        passphrase: *const c_char,
+        passphrase_size: size_t,
+    ) -> c_int;
 
     pub fn crypt_keyslot_destroy(cd: *mut crypt_device, keyslot: c_int) -> c_int;
 
-    pub fn crypt_get_active_device(cd: *mut crypt_device, name: *const c_char, cad: *mut crypt_active_device) -> c_int;
+    pub fn crypt_get_active_device(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        cad: *mut crypt_active_device,
+    ) -> c_int;
 
-    pub fn crypt_activate_by_passphrase(cd: *mut crypt_device,
-                                        name: *const c_char,
-                                        keyslot: c_int,
-                                        passphrase: *const c_char,
-                                        passphrase_size: size_t,
-                                        flags: u32)
-                                        -> c_int;
+    pub fn crypt_activate_by_passphrase(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        keyslot: c_int,
+        passphrase: *const c_char,
+        passphrase_size: size_t,
+        flags: u32,
+    ) -> c_int;
 
-    pub fn crypt_activate_by_keyfile_offset(cd: *mut crypt_device,
-                                            name: *const c_char,
-                                            keyslot: c_int,
-                                            keyfile: *const c_char,
-                                            keyfile_size: size_t,
-                                            keyfile_offset: size_t,
-                                            flags: u32)
-                                            -> c_int;
-    pub fn crypt_activate_by_keyfile(cd: *mut crypt_device,
-                                     name: *const c_char,
-                                     keyslot: c_int,
-                                     keyfile: *const c_char,
-                                     keyfile_size: size_t,
-                                     flags: u32)
-                                     -> c_int;
+    pub fn crypt_activate_by_keyfile_offset(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        keyslot: c_int,
+        keyfile: *const c_char,
+        keyfile_size: size_t,
+        keyfile_offset: size_t,
+        flags: u32,
+    ) -> c_int;
+    pub fn crypt_activate_by_keyfile(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        keyslot: c_int,
+        keyfile: *const c_char,
+        keyfile_size: size_t,
+        flags: u32,
+    ) -> c_int;
 
-    pub fn crypt_activate_by_volume_key(cd: *mut crypt_device,
-                                        name: *const c_char,
-                                        volume_key: *const c_char,
-                                        volume_key_size: size_t,
-                                        flags: u32)
-                                        -> c_int;
+    pub fn crypt_activate_by_volume_key(
+        cd: *mut crypt_device,
+        name: *const c_char,
+        volume_key: *const c_char,
+        volume_key_size: size_t,
+        flags: u32,
+    ) -> c_int;
 
     pub fn crypt_deactivate(cd: *mut crypt_device, name: *const c_char) -> c_int;
 
-    pub fn crypt_volume_key_get(cd: *mut crypt_device,
-                                keyslot: c_int,
-                                volume_key: *mut c_char,
-                                volume_key_size: *mut size_t,
-                                passphrase: *const c_char,
-                                passphrase_size: size_t)
-                                -> c_int;
+    pub fn crypt_volume_key_get(
+        cd: *mut crypt_device,
+        keyslot: c_int,
+        volume_key: *mut c_char,
+        volume_key_size: *mut size_t,
+        passphrase: *const c_char,
+        passphrase_size: size_t,
+    ) -> c_int;
 
-    pub fn crypt_volume_key_verify(cd: *mut crypt_device, volume_key: *const c_char, volume_key_size: size_t) -> c_int;
+    pub fn crypt_volume_key_verify(
+        cd: *mut crypt_device,
+        volume_key: *const c_char,
+        volume_key_size: size_t,
+    ) -> c_int;
 
     pub fn crypt_status(cd: *mut crypt_device, name: *const c_char) -> crypt_status_info;
 
@@ -325,33 +372,48 @@ extern "C" {
     pub fn crypt_get_volume_key_size(cd: *mut crypt_device) -> c_int;
     pub fn crypt_get_verity_info(cd: *mut crypt_device, vp: *mut crypt_params_verity);
 
-    pub fn crypt_benchmark(cd: *mut crypt_device,
-                           cipher: *const c_char,
-                           cipher_mode: *const c_char,
-                           volume_key_size: size_t,
-                           iv_size: size_t,
-                           buffer_size: size_t,
-                           encryption_mbs: *mut c_double,
-                           decryption_mbs: *mut c_double)
-                           -> c_int;
-    pub fn crypt_benchmark_kdf(cd: *mut crypt_device,
-                               kdf: *const c_char,
-                               hash: *const c_char,
-                               password: *const c_char,
-                               password_size: size_t,
-                               salt: *const c_char,
-                               salt_size: size_t,
-                               iterations_sec: *mut u64)
-                               -> c_int;
+    pub fn crypt_benchmark(
+        cd: *mut crypt_device,
+        cipher: *const c_char,
+        cipher_mode: *const c_char,
+        volume_key_size: size_t,
+        iv_size: size_t,
+        buffer_size: size_t,
+        encryption_mbs: *mut c_double,
+        decryption_mbs: *mut c_double,
+    ) -> c_int;
+    pub fn crypt_benchmark_kdf(
+        cd: *mut crypt_device,
+        kdf: *const c_char,
+        hash: *const c_char,
+        password: *const c_char,
+        password_size: size_t,
+        salt: *const c_char,
+        salt_size: size_t,
+        iterations_sec: *mut u64,
+    ) -> c_int;
 
     pub fn crypt_keyslot_status(cd: *mut crypt_device, keyslot: c_int) -> crypt_keyslot_info;
 
     pub fn crypt_keyslot_max(crypt_device_type: *const c_char) -> c_int;
 
-    pub fn crypt_keyslot_area(cd: *mut crypt_device, keyslot: c_int, offset: *mut u64, length: *mut u64) -> c_int;
+    pub fn crypt_keyslot_area(
+        cd: *mut crypt_device,
+        keyslot: c_int,
+        offset: *mut u64,
+        length: *mut u64,
+    ) -> c_int;
 
-    pub fn crypt_header_backup(cd: *mut crypt_device, requested_type: *const c_char, backup_file: *const c_char) -> c_int;
-    pub fn crypt_header_restore(cd: *mut crypt_device, requested_type: *const c_char, backup_file: *const c_char) -> c_int;
+    pub fn crypt_header_backup(
+        cd: *mut crypt_device,
+        requested_type: *const c_char,
+        backup_file: *const c_char,
+    ) -> c_int;
+    pub fn crypt_header_restore(
+        cd: *mut crypt_device,
+        requested_type: *const c_char,
+        backup_file: *const c_char,
+    ) -> c_int;
 
     #[deprecated]
     pub fn crypt_last_error(cd: *mut crypt_device, buf: *mut c_char, size: size_t);
@@ -363,9 +425,8 @@ extern "C" {
     pub fn crypt_set_debug_level(level: crypt_debug_level);
 }
 
-
 impl FromStr for crypt_device_type {
-	type Err = ();
+    type Err = ();
 
     fn from_str(s: &str) -> Result<crypt_device_type, ()> {
         match s {
@@ -399,16 +460,26 @@ mod tests {
 
     #[test]
     fn test_device_type_conversion() {
-        assert_eq!(Ok(crypt_device_type::PLAIN),
-                   crypt_device_type::from_str("PLAIN"));
-        assert_eq!(Ok(crypt_device_type::LUKS1),
-                   crypt_device_type::from_str("LUKS1"));
-        assert_eq!(Ok(crypt_device_type::LOOPAES),
-                   crypt_device_type::from_str("LOOPAES"));
-        assert_eq!(Ok(crypt_device_type::VERITY),
-                   crypt_device_type::from_str("VERITY"));
-        assert_eq!(Ok(crypt_device_type::TCRYPT),
-                   crypt_device_type::from_str("TCRYPT"));
+        assert_eq!(
+            Ok(crypt_device_type::PLAIN),
+            crypt_device_type::from_str("PLAIN")
+        );
+        assert_eq!(
+            Ok(crypt_device_type::LUKS1),
+            crypt_device_type::from_str("LUKS1")
+        );
+        assert_eq!(
+            Ok(crypt_device_type::LOOPAES),
+            crypt_device_type::from_str("LOOPAES")
+        );
+        assert_eq!(
+            Ok(crypt_device_type::VERITY),
+            crypt_device_type::from_str("VERITY")
+        );
+        assert_eq!(
+            Ok(crypt_device_type::TCRYPT),
+            crypt_device_type::from_str("TCRYPT")
+        );
     }
 
     #[test]

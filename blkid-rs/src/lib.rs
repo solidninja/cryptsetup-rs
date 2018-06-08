@@ -9,7 +9,6 @@ use std::io::Read;
 use std::mem;
 use std::str;
 
-
 pub trait LuksHeader {
     fn version(&self) -> u16;
     fn cipher_name(&self) -> Result<&str, Error>;
@@ -202,7 +201,6 @@ pub mod raw {
         }
     }
 
-
     impl super::LuksHeader for luks_phdr {
         fn version(&self) -> u16 {
             self.version
@@ -249,9 +247,9 @@ pub mod raw {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::io::Cursor;
     use uuid;
-    use super::*;
 
     #[test]
     fn test_luks_header_from_byte_buffer() {
@@ -265,13 +263,24 @@ mod tests {
         assert_eq!(luks_header.hash_spec().unwrap(), "sha256");
         assert_eq!(luks_header.payload_offset(), 4096);
         assert_eq!(luks_header.key_bytes(), 32);
-        assert_eq!(luks_header.mk_digest(),
-                   &[207, 94, 180, 192, 48, 113, 190, 213, 230, 144, 200, 71, 179, 0, 190, 186, 208, 53, 50, 113]);
-        assert_eq!(luks_header.mk_digest_salt(),
-                   &[112, 146, 12, 156, 169, 7, 82, 92, 121, 95, 68, 8, 98, 241, 230, 143, 12, 169, 53, 173, 219, 21, 43, 165, 215, 167,
-                     191, 94, 150, 66, 144, 122]);
+        assert_eq!(
+            luks_header.mk_digest(),
+            &[
+                207, 94, 180, 192, 48, 113, 190, 213, 230, 144, 200, 71, 179, 0, 190, 186, 208, 53,
+                50, 113
+            ]
+        );
+        assert_eq!(
+            luks_header.mk_digest_salt(),
+            &[
+                112, 146, 12, 156, 169, 7, 82, 92, 121, 95, 68, 8, 98, 241, 230, 143, 12, 169, 53,
+                173, 219, 21, 43, 165, 215, 167, 191, 94, 150, 66, 144, 122
+            ]
+        );
         assert_eq!(luks_header.mk_digest_iterations(), 1000);
-        assert_eq!(luks_header.uuid().unwrap(),
-                   uuid::Uuid::parse_str("a1b49d2d-8a7e-4b04-ab2a-89f3408fd198").unwrap())
+        assert_eq!(
+            luks_header.uuid().unwrap(),
+            uuid::Uuid::parse_str("a1b49d2d-8a7e-4b04-ab2a-89f3408fd198").unwrap()
+        )
     }
 }
