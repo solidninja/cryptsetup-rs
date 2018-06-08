@@ -1,3 +1,19 @@
+//! Rust bindings to `libcryptsetup` - working with encrypted disks on Linux
+//!
+//! # Example
+//!
+//! See `api` module documentation for more.
+//!
+//! ```
+//! use cryptsetup_rs::*;
+//! # fn foo() -> Result<()> {
+//! let device = open("/dev/loop0")?.luks1()?;
+//! println!("Device UUID: {}", device.uuid());
+//! println!("Device cipher: {}", device.cipher());
+//! # Ok(())
+//! # }
+//! ```
+
 #![deny(warnings)]
 
 extern crate blkid_rs;

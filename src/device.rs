@@ -1,3 +1,7 @@
+//! Low-level cryptsetup binding that sits directly on top of the `libcryptsetup` C API
+//!
+//! Consider using the high-level binding in the `api` module instead
+
 use std::ffi;
 use std::mem;
 use std::path::Path;
@@ -16,8 +20,11 @@ pub type RawDevice = *mut raw::crypt_device;
 
 #[derive(Debug)]
 pub enum Error {
+    /// Error that originates from `libcryptsetup` (with numeric error code)
     CryptsetupError(errno::Errno),
+    /// IO error
     IOError(::std::io::Error),
+    /// Error from the blkid-rs library (while reading LUKS1 header)
     BlkidError(blkid_rs::Error),
 }
 
@@ -64,6 +71,7 @@ macro_rules! check_crypt_error {
     };
 }
 
+/// Log function callback used by `libcryptsetup`
 #[allow(unused)]
 #[no_mangle]
 pub extern "C" fn cryptsetup_rs_log_callback(
@@ -89,6 +97,7 @@ pub fn enable_debug(debug: bool) {
     }
 }
 
+/// Initialise crypt device and check if provided device exists
 pub fn init<P: AsRef<Path>>(path: P) -> Result<RawDevice> {
     let mut cd = ptr::null_mut();
     let c_path = ffi::CString::new(path.as_ref().to_str().unwrap()).unwrap();
@@ -105,6 +114,10 @@ pub fn init<P: AsRef<Path>>(path: P) -> Result<RawDevice> {
     }
 }
 
+/// Load crypt device parameters from the on-disk header
+///
+/// Note that typically you cannot query the crypt device for information before this function is
+/// called.
 pub fn load(cd: &RawDevice, requested_type: raw::crypt_device_type) -> Result<()> {
     let c_type = ffi::CString::new(requested_type.to_str()).unwrap();
 
@@ -113,30 +126,36 @@ pub fn load(cd: &RawDevice, requested_type: raw::crypt_device_type) -> Result<()
     check_crypt_error!(res)
 }
 
+/// Get the cipher used by this crypt device
 pub fn cipher<'a>(cd: &'a RawDevice) -> Option<&'a str> {
     let c_cipher = unsafe { raw::crypt_get_cipher(*cd) };
     str_from_c_str(c_cipher)
 }
 
+/// Get the cipher mode used by this crypt device
 pub fn cipher_mode<'a>(cd: &'a RawDevice) -> Option<&'a str> {
     let c_cipher_mode = unsafe { raw::crypt_get_cipher_mode(*cd) };
     str_from_c_str(c_cipher_mode)
 }
 
+/// Get the path to the device (as `libcryptsetup` sees it)
 pub fn device_name<'a>(cd: &'a RawDevice) -> Option<&'a str> {
     let c_device_name = unsafe { raw::crypt_get_device_name(*cd) };
     str_from_c_str(c_device_name)
 }
 
+/// Dump text-formatted information about this device to the console
 pub fn dump(cd: &RawDevice) -> Result<()> {
     let res = unsafe { raw::crypt_dump(*cd) };
     check_crypt_error!(res)
 }
 
+/// Releases crypt device context and memory
 pub fn free(cd: &mut RawDevice) {
     unsafe { raw::crypt_free(*cd) }
 }
 
+/// Activate device based on provided key ("passphrase")
 pub fn luks_activate(cd: &mut RawDevice, name: &str, key: &[u8]) -> Result<Keyslot> {
     let c_name = ffi::CString::new(name).unwrap();
     let c_passphrase_len = key.len() as libc::size_t;
@@ -160,6 +179,8 @@ pub fn luks_activate(cd: &mut RawDevice, name: &str, key: &[u8]) -> Result<Keysl
     }
 }
 
+/// Add key slot using provided passphrase. If there is no previous passphrase, use the volume key
+/// that is in-memory to add the new key slot.
 pub fn luks_add_keyslot(
     cd: &mut RawDevice,
     key: &[u8], // FIXME investigate safer types for not leaking passwords in memory
@@ -206,7 +227,10 @@ pub fn luks_add_keyslot(
     }
 }
 
-pub fn luks_format(
+/// Format a new crypt device but do not activate it
+///
+/// Note this does not add an active keyslot
+pub fn luks1_format(
     cd: &mut RawDevice,
     cipher: &str,
     cipher_mode: &str,
@@ -243,6 +267,7 @@ pub fn luks_format(
     check_crypt_error!(res)
 }
 
+/// Get which RNG is used
 pub fn rng_type(cd: &RawDevice) -> raw::crypt_rng_type {
     unsafe {
         let res = raw::crypt_get_rng_type(*cd);
@@ -250,25 +275,30 @@ pub fn rng_type(cd: &RawDevice) -> raw::crypt_rng_type {
     }
 }
 
+/// Set the number of milliseconds for `PBKDF2` function iteration
 pub fn set_iteration_time(cd: &mut RawDevice, iteration_time_ms: u64) {
     unsafe {
         raw::crypt_set_iteration_time(*cd, iteration_time_ms);
     }
 }
 
+/// Set which RNG is used
 pub fn set_rng_type(cd: &mut RawDevice, rng_type: raw::crypt_rng_type) {
     unsafe { raw::crypt_set_rng_type(*cd, rng_type) }
 }
 
+/// Get information about a keyslot
 pub fn keyslot_status(cd: &RawDevice, slot: Keyslot) -> raw::crypt_keyslot_info {
     unsafe { raw::crypt_keyslot_status(*cd, slot as libc::c_int) }
 }
 
+/// Get size in bytes of the volume key
 pub fn volume_key_size(cd: &RawDevice) -> u8 {
     let res = unsafe { raw::crypt_get_volume_key_size(*cd) };
     res as u8
 }
 
+/// Get device UUID
 pub fn uuid<'a>(cd: &'a RawDevice) -> Option<uuid::Uuid> {
     let c_uuid_str = unsafe { raw::crypt_get_uuid(*cd) };
     str_from_c_str(c_uuid_str).and_then(|uuid_str| uuid::Uuid::parse_str(uuid_str).ok())

@@ -1,3 +1,5 @@
+//! High-level API to work with `libcryptsetup` supported devices (disks)
+
 use std::fmt;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -12,6 +14,16 @@ use raw;
 use uuid;
 
 /// Builder to open a crypt device at the specified path
+///
+/// # Examples
+///
+/// ```
+/// use cryptsetup_rs::*;
+/// # fn foo() -> Result<()> {
+/// let device = open("/dev/loop0")?.luks1()?;
+/// # Ok(())
+/// # }
+/// ```
 pub fn open<P: AsRef<Path>>(path: P) -> Result<CryptDeviceOpenBuilder> {
     let cd = device::init(path.as_ref())?;
     Ok(CryptDeviceOpenBuilder {
@@ -21,6 +33,24 @@ pub fn open<P: AsRef<Path>>(path: P) -> Result<CryptDeviceOpenBuilder> {
 }
 
 /// Builder to format a crypt device at the specified path
+///
+/// # Examples
+///
+/// ```
+/// # extern crate uuid;
+/// # extern crate cryptsetup_rs;
+/// use cryptsetup_rs::*;
+/// use uuid::Uuid;
+///
+/// # fn foo() -> Result<()> {
+/// let uuid = Uuid::new_v4();
+/// let device = format("/dev/loop0")?
+///     .rng_type(crypt_rng_type::CRYPT_RNG_URANDOM)
+///     .iteration_time(5000)
+///     .luks1("aes", "xts-plain", "sha256", 256, Some(&uuid))?;
+/// # Ok(())
+/// # }
+/// ```
 pub fn format<P: AsRef<Path>>(path: P) -> Result<CryptDeviceFormatBuilder> {
     let cd = device::init(path.as_ref())?;
     Ok(CryptDeviceFormatBuilder {
@@ -62,13 +92,13 @@ pub struct CryptDeviceFormatBuilder {
 
 impl CryptDeviceFormatBuilder {
     /// Set the iteration time for the `PBKDF2` function. Note that this does not affect the MK iterations.
-    pub fn set_iteration_time(mut self, iteration_time_ms: u64) -> Self {
+    pub fn iteration_time(mut self, iteration_time_ms: u64) -> Self {
         device::set_iteration_time(&mut self.cd, iteration_time_ms);
         self
     }
 
     /// Set the random number generator to use
-    pub fn set_rng_type(mut self, rng_type: raw::crypt_rng_type) -> Self {
+    pub fn rng_type(mut self, rng_type: raw::crypt_rng_type) -> Self {
         device::set_rng_type(&mut self.cd, rng_type);
         self
     }
@@ -82,7 +112,7 @@ impl CryptDeviceFormatBuilder {
         mk_bits: usize,
         maybe_uuid: Option<&uuid::Uuid>,
     ) -> Result<CryptDeviceHandle<Luks1Params>> {
-        let _ = device::luks_format(&mut self.cd, cipher, cipher_mode, hash, mk_bits, maybe_uuid)?;
+        let _ = device::luks1_format(&mut self.cd, cipher, cipher_mode, hash, mk_bits, maybe_uuid)?;
         let params = load_luks1_params(&self.path)?;
         Ok(CryptDeviceHandle {
             cd: self.cd,
@@ -94,25 +124,25 @@ impl CryptDeviceFormatBuilder {
 
 /// Trait representing common operations on a crypt device
 pub trait CryptDevice {
-    /// Path to the crypt device
+    /// Path the device was opened/created with
     fn path(&self) -> &Path;
 
-    /// Name of cipher used in crypt device
+    /// Name of cipher used
     fn cipher(&self) -> &str;
 
-    /// Name of cipher mode used in crypt device
+    /// Name of cipher mode used
     fn cipher_mode(&self) -> &str;
 
-    /// Path to the underlying device
+    /// Path to the underlying device (as reported by `libcryptsetup`)
     fn device_name(&self) -> &str;
 
     /// Random number generator used for operations on this crypt device
     fn rng_type(&self) -> raw::crypt_rng_type;
 
-    /// Set the random number generator to use
+    /// Sets the random number generator to use
     fn set_rng_type(&mut self, rng_type: raw::crypt_rng_type);
 
-    /// Set the iteration time for the `PBKDF2` function. Note that this does not affect the MK iterations.
+    /// Sets the iteration time for the `PBKDF2` function. Note that this does not affect the MK iterations.
     fn set_iteration_time(&mut self, iteration_time_ms: u64);
 
     /// Volume key size (in bytes)
@@ -130,7 +160,7 @@ pub trait Luks1CryptDevice {
     /// Activate the crypt device, and give it the specified name
     fn activate(&mut self, name: &str, key: &[u8]) -> Result<Keyslot>;
 
-    /// Add a new keyslot with the specified parameters
+    /// Add a new keyslot with the specified key
     fn add_keyslot(
         &mut self,
         key: &[u8],

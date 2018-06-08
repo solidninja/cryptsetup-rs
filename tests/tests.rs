@@ -43,9 +43,7 @@ impl TestContext {
             panic!("Failed to create disk image at {}", crypt_file.display());
         }
 
-        cryptsetup_rs::format(crypt_file)
-            .unwrap()
-            .set_rng_type(crypt_rng_type::CRYPT_RNG_URANDOM)
+        cryptsetup_rs::format(crypt_file).unwrap()
     }
 }
 
@@ -54,7 +52,9 @@ fn test_create_new_luks1_cryptdevice_no_errors() {
     let ctx = TestContext::new("new_luks1_cryptdevice".to_string());
     let uuid = Uuid::new_v4();
 
-    let device_format = ctx.new_crypt_device().set_iteration_time(42);
+    let device_format = ctx.new_crypt_device()
+        .rng_type(crypt_rng_type::CRYPT_RNG_URANDOM)
+        .iteration_time(42);
 
     let mut dev = device_format
         .luks1("aes", "xts-plain", "sha256", 256, Some(&uuid))
