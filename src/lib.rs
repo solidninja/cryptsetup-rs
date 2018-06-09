@@ -15,6 +15,7 @@
 //! ```
 
 #![deny(warnings)]
+#[warn(unused_must_use)]
 
 extern crate blkid_rs;
 extern crate errno;
@@ -28,6 +29,6 @@ extern crate log;
 pub mod api;
 pub mod device;
 
-pub use api::{enable_debug, format, open};
-pub use api::{CryptDevice, CryptDeviceType, Error, Keyslot, Luks1CryptDevice, Result};
+pub use api::{enable_debug, format, open, luks1_uuid};
+pub use api::{CryptDevice, CryptDeviceType, Error, Keyslot, Luks1CryptDevice, Luks1CryptDeviceHandle, Result};
 pub use raw::{crypt_device_type, crypt_keyslot_info, crypt_rng_type};

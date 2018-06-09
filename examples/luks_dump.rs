@@ -24,8 +24,7 @@ fn dump_slot(crypt_device: &Luks1CryptDevice, slot: Keyslot) -> Result<()> {
 }
 
 fn dump(device_path: &str) -> Result<()> {
-    // TODO: refactor API so each device type has only the methods it needs
-    let dev = api::open(device_path)?.luks1()?;
+    let dev = open(device_path)?.luks1()?;
 
     println!("LUKS header information for {}", dev.device_name());
     println!();

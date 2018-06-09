@@ -24,7 +24,7 @@ struct TestContext {
 
 impl TestContext {
     fn new(name: String) -> TestContext {
-        env_logger::init().unwrap();
+        env_logger::init();
         cryptsetup_rs::enable_debug(true);
         let dir = tempdir::TempDir::new(&name).unwrap();
         TestContext { name, dir }

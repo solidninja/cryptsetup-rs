@@ -5,13 +5,16 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
-use blkid_rs;
+use blkid_rs::{BlockDevice, LuksHeader};
+
 use device;
 pub use device::enable_debug;
 use device::RawDevice;
 pub use device::{Error, Keyslot, Result};
 use raw;
 use uuid;
+
+pub type Luks1CryptDeviceHandle = CryptDeviceHandle<Luks1Params>;
 
 /// Builder to open a crypt device at the specified path
 ///
@@ -59,9 +62,17 @@ pub fn format<P: AsRef<Path>>(path: P) -> Result<CryptDeviceFormatBuilder> {
     })
 }
 
+/// Read the UUID of a LUKS1 container without opening the device
+pub fn luks1_uuid<P: AsRef<Path>>(path: P) -> Result<uuid::Uuid> {
+    let device_file = File::open(path.as_ref())?;
+    let luks_phdr = BlockDevice::read_luks_header(device_file)?;
+    let uuid = luks_phdr.uuid()?;
+    Ok(uuid)
+}
+
 fn load_luks1_params<P: AsRef<Path>>(path: P) -> Result<Luks1Params> {
     let device_file = File::open(path.as_ref())?;
-    let luks_phdr = blkid_rs::BlockDevice::read_luks_header(device_file)?;
+    let luks_phdr = BlockDevice::read_luks_header(device_file)?;
     Luks1Params::from(luks_phdr)
 }
 
@@ -274,7 +285,7 @@ pub struct Luks1Params {
 }
 
 impl Luks1Params {
-    fn from(header: impl blkid_rs::LuksHeader) -> Result<Luks1Params> {
+    fn from(header: impl LuksHeader) -> Result<Luks1Params> {
         let hash_spec = header.hash_spec()?.to_owned();
         let payload_offset = header.payload_offset();
         let mk_bits = header.key_bytes() * 8;
