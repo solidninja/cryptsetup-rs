@@ -159,14 +159,15 @@ pub fn free(cd: &mut RawDevice) {
 pub fn luks_activate(cd: &mut RawDevice, name: &str, key: &[u8]) -> Result<Keyslot> {
     let c_name = ffi::CString::new(name).unwrap();
     let c_passphrase_len = key.len() as libc::size_t;
+    // cast the passphrase to a pointer directly - it will not be NUL terminated but the passed length is used
+    let c_passphrase = key as *const [u8] as *const libc::c_char;
 
     let res = unsafe {
-        let c_passphrase = ffi::CString::from_vec_unchecked(key.to_owned());
         raw::crypt_activate_by_passphrase(
             *cd,
             c_name.as_ptr(),
             ANY_KEYSLOT,
-            c_passphrase.as_ptr(),
+            c_passphrase,
             c_passphrase_len,
             0u32,
         )
@@ -183,27 +184,27 @@ pub fn luks_activate(cd: &mut RawDevice, name: &str, key: &[u8]) -> Result<Keysl
 /// that is in-memory to add the new key slot.
 pub fn luks_add_keyslot(
     cd: &mut RawDevice,
-    key: &[u8], // FIXME investigate safer types for not leaking passwords in memory
+    key: &[u8],
     maybe_prev_key: Option<&[u8]>,
     maybe_keyslot: Option<Keyslot>,
 ) -> Result<Keyslot> {
     let c_key_len = key.len() as libc::size_t;
-    let c_key = unsafe { ffi::CString::from_vec_unchecked(key.to_owned()) };
+    let c_key = key as *const [u8] as *const libc::c_char;;
     let c_keyslot = maybe_keyslot
         .map(|k| k as libc::c_int)
         .unwrap_or(ANY_KEYSLOT as libc::c_int);
 
     let res = if let Some(prev_key) = maybe_prev_key {
         let c_prev_key_len = prev_key.len() as libc::size_t;
-        let c_prev_key = unsafe { ffi::CString::from_vec_unchecked(prev_key.to_owned()) };
+        let c_prev_key = prev_key as *const [u8] as *const libc::c_char;;
 
         unsafe {
             raw::crypt_keyslot_add_by_passphrase(
                 *cd,
                 c_keyslot,
-                c_prev_key.as_ptr(),
+                c_prev_key,
                 c_prev_key_len,
-                c_key.as_ptr(),
+                c_key,
                 c_key_len,
             )
         }
@@ -214,7 +215,7 @@ pub fn luks_add_keyslot(
                 c_keyslot,
                 ptr::null(),
                 0 as libc::size_t,
-                c_key.as_ptr(),
+                c_key,
                 c_key_len,
             )
         }
