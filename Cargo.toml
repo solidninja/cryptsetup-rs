@@ -12,11 +12,11 @@ log = "0.4.4"
 
 [dependencies.blkid-rs]
 path = "blkid-rs"
-version = "0.1.1"
+version = "0.2.0"
 
 [dependencies.libcryptsetup-sys]
 path = "libcryptsetup-sys"
-version = "0.1.1"
+version = "0.2.0"
 
 [dependencies.uuid]
 features = ["v4"]
