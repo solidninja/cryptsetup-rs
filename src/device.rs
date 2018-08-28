@@ -43,8 +43,6 @@ impl From<blkid_rs::Error> for Error {
 pub type Result<T> = result::Result<T, Error>;
 pub type Keyslot = u8;
 
-// TODO - each time .to_owned() is called, need to manually zero the memory afterwards
-
 const ANY_KEYSLOT: libc::c_int = -1 as libc::c_int;
 
 fn str_from_c_str<'a>(c_str: *const libc::c_char) -> Option<&'a str> {
@@ -81,10 +79,10 @@ pub extern "C" fn cryptsetup_rs_log_callback(
 ) {
     let msg = str_from_c_str(message).unwrap();
     match level {
-        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg),
-        raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg),
-        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg),
+        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg.trim_right()),
+        raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg.trim_right()),
+        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_right()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_right()),
     }
 }
 
