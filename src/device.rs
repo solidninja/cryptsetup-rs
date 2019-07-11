@@ -79,10 +79,10 @@ pub extern "C" fn cryptsetup_rs_log_callback(
 ) {
     let msg = str_from_c_str(message).unwrap();
     match level {
-        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg.trim_right()),
-        raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg.trim_right()),
-        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_right()),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_right()),
+        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_end()),
     }
 }
 
