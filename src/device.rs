@@ -226,6 +226,21 @@ pub fn luks_add_keyslot(
     }
 }
 
+/// Destroy (and disable) key slot
+pub fn luks_destroy_keyslot(
+      cd: &mut RawDevice,
+      keyslot: Keyslot,
+) -> Result<()> {
+    let res = unsafe {
+        raw::crypt_keyslot_destroy(*cd, keyslot as libc::c_int)
+    };
+    if res < 0 {
+        crypt_error!(res)
+    } else {
+        Ok(())
+    }
+}
+
 /// Format a new crypt device but do not activate it
 ///
 /// Note this does not add an active keyslot

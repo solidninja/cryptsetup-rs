@@ -179,6 +179,9 @@ pub trait Luks1CryptDevice {
         maybe_keyslot: Option<Keyslot>,
     ) -> Result<Keyslot>;
 
+    /// Destroy (and disable) key slot
+    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()>;
+
     /// Dump text-formatted information about the current device to stdout
     fn dump(&self);
 
@@ -317,6 +320,10 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
         maybe_keyslot: Option<Keyslot>,
     ) -> Result<Keyslot> {
         device::luks_add_keyslot(&mut self.cd, key, maybe_prev_key, maybe_keyslot)
+    }
+
+    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()> {
+        device::luks_destroy_keyslot(&mut self.cd, slot)
     }
 
     fn dump(&self) {
