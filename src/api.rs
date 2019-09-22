@@ -178,6 +178,9 @@ pub trait Luks1CryptDevice {
         maybe_keyslot: Option<Keyslot>,
     ) -> Result<Keyslot>;
 
+    /// Replace an old key with a new one
+    fn update_keyslot(&mut self, key: &[u8], prev_key: &[u8], maybe_keyslot: Option<Keyslot>) -> Result<Keyslot>;
+
     /// Destroy (and disable) key slot
     fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()>;
 
@@ -319,6 +322,10 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
         maybe_keyslot: Option<Keyslot>,
     ) -> Result<Keyslot> {
         crate::device::luks_add_keyslot(&mut self.cd, key, maybe_prev_key, maybe_keyslot)
+    }
+
+    fn update_keyslot(&mut self, key: &[u8], prev_key: &[u8], maybe_keyslot: Option<Keyslot>) -> Result<Keyslot> {
+        crate::device::luks_update_keyslot(&mut self.cd, key, prev_key, maybe_keyslot)
     }
 
     fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()> {
