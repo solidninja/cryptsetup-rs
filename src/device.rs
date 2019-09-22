@@ -161,14 +161,7 @@ pub fn luks_activate(cd: &mut RawDevice, name: &str, key: &[u8]) -> Result<Keysl
     let c_passphrase = key as *const [u8] as *const libc::c_char;
 
     let res = unsafe {
-        raw::crypt_activate_by_passphrase(
-            *cd,
-            c_name.as_ptr(),
-            ANY_KEYSLOT,
-            c_passphrase,
-            c_passphrase_len,
-            0u32,
-        )
+        raw::crypt_activate_by_passphrase(*cd, c_name.as_ptr(), ANY_KEYSLOT, c_passphrase, c_passphrase_len, 0u32)
     };
 
     if res < 0 {
@@ -196,26 +189,10 @@ pub fn luks_add_keyslot(
         let c_prev_key_len = prev_key.len() as libc::size_t;
         let c_prev_key = prev_key as *const [u8] as *const libc::c_char;;
 
-        unsafe {
-            raw::crypt_keyslot_add_by_passphrase(
-                *cd,
-                c_keyslot,
-                c_prev_key,
-                c_prev_key_len,
-                c_key,
-                c_key_len,
-            )
-        }
+        unsafe { raw::crypt_keyslot_add_by_passphrase(*cd, c_keyslot, c_prev_key, c_prev_key_len, c_key, c_key_len) }
     } else {
         unsafe {
-            raw::crypt_keyslot_add_by_volume_key(
-                *cd,
-                c_keyslot,
-                ptr::null(),
-                0 as libc::size_t,
-                c_key,
-                c_key_len,
-            )
+            raw::crypt_keyslot_add_by_volume_key(*cd, c_keyslot, ptr::null(), 0 as libc::size_t, c_key, c_key_len)
         }
     };
 
@@ -226,14 +203,37 @@ pub fn luks_add_keyslot(
     }
 }
 
-/// Destroy (and disable) key slot
-pub fn luks_destroy_keyslot(
-      cd: &mut RawDevice,
-      keyslot: Keyslot,
-) -> Result<()> {
+/// Add key slot using provided passphrase. If there is no previous passphrase, use the volume key
+/// that is in-memory to add the new key slot.
+pub fn luks_update_keyslot(
+    cd: &mut RawDevice,
+    key: &[u8],
+    prev_key: &[u8],
+    maybe_keyslot: Option<Keyslot>,
+) -> Result<Keyslot> {
+    let c_key_len = key.len() as libc::size_t;
+    let c_key = key as *const [u8] as *const libc::c_char;;
+    let c_keyslot = maybe_keyslot
+        .map(|k| k as libc::c_int)
+        .unwrap_or(ANY_KEYSLOT as libc::c_int);
+
+    let c_prev_key_len = prev_key.len() as libc::size_t;
+    let c_prev_key = prev_key as *const [u8] as *const libc::c_char;;
+
     let res = unsafe {
-        raw::crypt_keyslot_destroy(*cd, keyslot as libc::c_int)
+        raw::crypt_keyslot_change_by_passphrase(*cd, c_keyslot, c_keyslot, c_prev_key, c_prev_key_len, c_key, c_key_len)
     };
+
+    if res < 0 {
+        crypt_error!(res)
+    } else {
+        Ok(res as Keyslot)
+    }
+}
+
+/// Destroy (and disable) key slot
+pub fn luks_destroy_keyslot(cd: &mut RawDevice, keyslot: Keyslot) -> Result<()> {
+    let res = unsafe { raw::crypt_keyslot_destroy(*cd, keyslot as libc::c_int) };
     if res < 0 {
         crypt_error!(res)
     } else {
