@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/solidninja/cryptsetup-rs.svg?branch=master)](https://travis-ci.org/solidninja/cryptsetup-rs)
+[![pipeline status](https://gitlab.com/solidninja/cryptsetup-rs/badges/master/pipeline.svg)](https://gitlab.com/solidninja/cryptsetup-rs/commits/master)
 [![crates.io Status](https://img.shields.io/crates/v/cryptsetup-rs.svg)](https://crates.io/crates/cryptsetup-rs)
 [![docs.rs build](https://docs.rs/cryptsetup-rs/badge.svg)](https://docs.rs/crate/cryptsetup-rs/)
 

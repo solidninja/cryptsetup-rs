@@ -15,11 +15,7 @@ fn dump_slot(crypt_device: &dyn Luks1CryptDevice, slot: Keyslot) -> Result<()> {
 
     println!("Key Slot {}: {}", slot, status);
     match status {
-        "ENABLED" =>
-        /* TODO  add keyslot information */
-        {
-            ()
-        }
+        "ENABLED" => (), // TODO  add keyslot information
         _ => (),
     }
     Ok(())

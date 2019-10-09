@@ -4,7 +4,7 @@ version = "0.1.2"
 authors = ["Vladimir Lushnikov <vladimir@solidninja.is>"]
 license = "LGPL-3.0"
 description = "FFI bindings to the libcryptsetup library"
-homepage = "https://github.com/solidninja/cryptsetup-rs"
+homepage = "https://gitlab.com/solidninja/cryptsetup-rs"
 edition = "2018"
 
 links = "cryptsetup"
