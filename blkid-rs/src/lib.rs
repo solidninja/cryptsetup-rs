@@ -39,7 +39,7 @@ impl BlockDevice {
     pub fn read_luks_header<R: Read>(reader: R) -> Result<raw::luks_phdr, Error> {
         let luks_phdr_size = mem::size_of::<raw::luks_phdr>();
         let mut buf = Vec::<u8>::with_capacity(luks_phdr_size);
-        let read_size = try!(reader.take(luks_phdr_size as u64).read_to_end(&mut buf));
+        let read_size = reader.take(luks_phdr_size as u64).read_to_end(&mut buf)?;
         if read_size != luks_phdr_size {
             Err(Error::ReadIncorrectHeaderSize)
         } else {
@@ -123,54 +123,54 @@ pub mod raw {
             }
             let mut cursor = Cursor::new(buf);
             let mut magic_buf = [0u8; LUKS_MAGIC_L];
-            let magic_len = try!(cursor.read(&mut magic_buf));
+            let magic_len = cursor.read(&mut magic_buf)?;
 
             if magic_len != LUKS_MAGIC_L || magic_buf != &LUKS_MAGIC[..] {
                 return Err(super::Error::InvalidMagic);
             }
 
-            let version = try!(cursor.read_u16::<BigEndian>());
+            let version = cursor.read_u16::<BigEndian>()?;
             if version != LUKS_VERSION_SUPPORTED {
                 return Err(super::Error::InvalidVersion);
             }
 
             let mut cipher_name_buf = [0u8; LUKS_CIPHERNAME_L];
-            let cipher_name_len = try!(cursor.read(&mut cipher_name_buf));
+            let cipher_name_len = cursor.read(&mut cipher_name_buf)?;
             if cipher_name_len != LUKS_CIPHERNAME_L {
                 return Err(super::Error::HeaderProcessingError);
             }
 
             let mut cipher_mode_buf = [0u8; LUKS_CIPHERMODE_L];
-            let cipher_mode_len = try!(cursor.read(&mut cipher_mode_buf));
+            let cipher_mode_len = cursor.read(&mut cipher_mode_buf)?;
             if cipher_mode_len != LUKS_CIPHERMODE_L {
                 return Err(super::Error::HeaderProcessingError);
             }
 
             let mut hash_spec_buf = [0u8; LUKS_HASHSPEC_L];
-            let hash_spec_len = try!(cursor.read(&mut hash_spec_buf));
+            let hash_spec_len = cursor.read(&mut hash_spec_buf)?;
             if hash_spec_len != LUKS_HASHSPEC_L {
                 return Err(super::Error::HeaderProcessingError);
             }
 
-            let payload_offset = try!(cursor.read_u32::<BigEndian>());
-            let key_bytes = try!(cursor.read_u32::<BigEndian>());
+            let payload_offset = cursor.read_u32::<BigEndian>()?;
+            let key_bytes = cursor.read_u32::<BigEndian>()?;
 
             let mut mk_digest_buf = [0u8; LUKS_DIGESTSIZE];
-            let mk_digest_len = try!(cursor.read(&mut mk_digest_buf));
+            let mk_digest_len = cursor.read(&mut mk_digest_buf)?;
             if mk_digest_len != LUKS_DIGESTSIZE {
                 return Err(super::Error::HeaderProcessingError);
             }
 
             let mut mk_digest_salt_buf = [0u8; LUKS_SALTSIZE];
-            let mk_digest_salt_len = try!(cursor.read(&mut mk_digest_salt_buf));
+            let mk_digest_salt_len = cursor.read(&mut mk_digest_salt_buf)?;
             if mk_digest_salt_len != LUKS_SALTSIZE {
                 return Err(super::Error::HeaderProcessingError);
             }
 
-            let mk_digest_iterations = try!(cursor.read_u32::<BigEndian>());
+            let mk_digest_iterations = cursor.read_u32::<BigEndian>()?;
 
             let mut uuid_buf = [0u8; UUID_STRING_L];
-            let uuid_len = try!(cursor.read(&mut uuid_buf));
+            let uuid_len = cursor.read(&mut uuid_buf)?;
             if uuid_len != UUID_STRING_L {
                 return Err(super::Error::HeaderProcessingError);
             }
@@ -239,7 +239,7 @@ pub mod raw {
         }
 
         fn uuid(&self) -> Result<uuid::Uuid, super::Error> {
-            let uuid_str = try!(u8_buf_to_str(&self.uuid));
+            let uuid_str = u8_buf_to_str(&self.uuid)?;
             uuid::Uuid::parse_str(uuid_str).map_err(From::from)
         }
     }
