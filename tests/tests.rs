@@ -3,7 +3,7 @@
 extern crate cryptsetup_rs;
 extern crate env_logger;
 extern crate log;
-extern crate tempdir;
+extern crate tempfile;
 extern crate uuid;
 
 #[macro_use]
@@ -12,7 +12,7 @@ extern crate expectest;
 use std::process::Command;
 
 use expectest::prelude::*;
-use tempdir::TempDir;
+use tempfile::{Builder, TempDir};
 use uuid::Uuid;
 
 use cryptsetup_rs::*;
@@ -26,7 +26,7 @@ impl TestContext {
     fn new(name: String) -> TestContext {
         env_logger::init();
         cryptsetup_rs::enable_debug(true);
-        let dir = tempdir::TempDir::new(&name).unwrap();
+        let dir = Builder::new().prefix(&name).tempdir().expect("Tempdir!");
         TestContext { name, dir }
     }
 

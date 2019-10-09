@@ -1,6 +1,6 @@
 [package]
 name = "blkid-rs"
-version = "0.1.2"
+version = "0.2.1"
 authors = ["Vladimir Lushnikov <vladimir@solidninja.is>"]
 description = "Rust implementation of blkid for LUKS volumes"
 license = "LGPL-3.0"
