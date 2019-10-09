@@ -52,7 +52,8 @@ fn test_create_new_luks1_cryptdevice_no_errors() {
     let ctx = TestContext::new("new_luks1_cryptdevice".to_string());
     let uuid = Uuid::new_v4();
 
-    let device_format = ctx.new_crypt_device()
+    let device_format = ctx
+        .new_crypt_device()
         .rng_type(crypt_rng_type::CRYPT_RNG_URANDOM)
         .iteration_time(42);
 
