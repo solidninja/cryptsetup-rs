@@ -27,7 +27,7 @@ pub enum Error {
     InvalidMagic,
     InvalidStringEncoding(str::Utf8Error),
     InvalidVersion,
-    InvalidUuid(uuid::ParseError),
+    InvalidUuid(uuid::parser::ParseError),
     ReadError(io::Error),
     ReadIncorrectHeaderSize,
     HeaderProcessingError,
@@ -54,8 +54,8 @@ impl convert::From<str::Utf8Error> for Error {
     }
 }
 
-impl convert::From<uuid::ParseError> for Error {
-    fn from(error: uuid::ParseError) -> Error {
+impl convert::From<uuid::parser::ParseError> for Error {
+    fn from(error: uuid::parser::ParseError) -> Error {
         Error::InvalidUuid(error)
     }
 }

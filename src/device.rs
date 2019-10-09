@@ -13,7 +13,7 @@ use blkid_rs;
 use errno;
 use libc;
 use raw;
-use uuid;
+use uuid::Uuid;
 
 /// Raw pointer to the underlying `crypt_device` opaque struct
 pub type RawDevice = *mut raw::crypt_device;
@@ -79,10 +79,10 @@ pub extern "C" fn cryptsetup_rs_log_callback(
 ) {
     let msg = str_from_c_str(message).unwrap();
     match level {
-        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg.trim_right()),
-        raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg.trim_right()),
-        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_right()),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_right()),
+        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_end()),
     }
 }
 
@@ -187,14 +187,14 @@ pub fn luks_add_keyslot(
     maybe_keyslot: Option<Keyslot>,
 ) -> Result<Keyslot> {
     let c_key_len = key.len() as libc::size_t;
-    let c_key = key as *const [u8] as *const libc::c_char;;
+    let c_key = key as *const [u8] as *const libc::c_char;
     let c_keyslot = maybe_keyslot
         .map(|k| k as libc::c_int)
         .unwrap_or(ANY_KEYSLOT as libc::c_int);
 
     let res = if let Some(prev_key) = maybe_prev_key {
         let c_prev_key_len = prev_key.len() as libc::size_t;
-        let c_prev_key = prev_key as *const [u8] as *const libc::c_char;;
+        let c_prev_key = prev_key as *const [u8] as *const libc::c_char;
 
         unsafe {
             raw::crypt_keyslot_add_by_passphrase(
@@ -240,7 +240,7 @@ pub fn luks1_format(
     let c_cipher = ffi::CString::new(cipher).unwrap();
     let c_cipher_mode = ffi::CString::new(cipher_mode).unwrap();
     let c_hash = ffi::CString::new(hash).unwrap();
-    let c_uuid = maybe_uuid.map(|uuid| ffi::CString::new(uuid.hyphenated().to_string()).unwrap());
+    let c_uuid = maybe_uuid.map(|uuid| ffi::CString::new(uuid.to_hyphenated().to_string()).unwrap());
 
     let mut luks_params = raw::crypt_params_luks1 {
         hash: c_hash.as_ptr(),
@@ -298,7 +298,7 @@ pub fn volume_key_size(cd: &RawDevice) -> u8 {
 }
 
 /// Get device UUID
-pub fn uuid<'a>(cd: &'a RawDevice) -> Option<uuid::Uuid> {
+pub fn uuid(cd: &RawDevice) -> Option<Uuid> {
     let c_uuid_str = unsafe { raw::crypt_get_uuid(*cd) };
-    str_from_c_str(c_uuid_str).and_then(|uuid_str| uuid::Uuid::parse_str(uuid_str).ok())
+    str_from_c_str(c_uuid_str).and_then(|uuid_str| Uuid::parse_str(uuid_str).ok())
 }

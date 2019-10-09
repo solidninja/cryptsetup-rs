@@ -7,10 +7,9 @@ use std::ptr;
 
 use blkid_rs::{BlockDevice, LuksHeader};
 
-use device;
-pub use device::enable_debug;
-use device::RawDevice;
-pub use device::{Error, Keyslot, Result};
+pub use crate::device::enable_debug;
+use crate::device::RawDevice;
+pub use crate::device::{Error, Keyslot, Result};
 use raw;
 use uuid;
 
@@ -28,7 +27,7 @@ pub type Luks1CryptDeviceHandle = CryptDeviceHandle<Luks1Params>;
 /// # }
 /// ```
 pub fn open<P: AsRef<Path>>(path: P) -> Result<CryptDeviceOpenBuilder> {
-    let cd = device::init(path.as_ref())?;
+    let cd = crate::device::init(path.as_ref())?;
     Ok(CryptDeviceOpenBuilder {
         path: path.as_ref().to_owned(),
         cd,
@@ -55,7 +54,7 @@ pub fn open<P: AsRef<Path>>(path: P) -> Result<CryptDeviceOpenBuilder> {
 /// # }
 /// ```
 pub fn format<P: AsRef<Path>>(path: P) -> Result<CryptDeviceFormatBuilder> {
-    let cd = device::init(path.as_ref())?;
+    let cd = crate::device::init(path.as_ref())?;
     Ok(CryptDeviceFormatBuilder {
         path: path.as_ref().to_owned(),
         cd,
@@ -85,7 +84,7 @@ pub struct CryptDeviceOpenBuilder {
 impl CryptDeviceOpenBuilder {
     /// Loads an existing LUKS1 crypt device
     pub fn luks1(self: CryptDeviceOpenBuilder) -> Result<CryptDeviceHandle<Luks1Params>> {
-        let _ = device::load(&self.cd, raw::crypt_device_type::LUKS1);
+        let _ = crate::device::load(&self.cd, raw::crypt_device_type::LUKS1);
         let params = load_luks1_params(&self.path)?;
         Ok(CryptDeviceHandle {
             cd: self.cd,
@@ -104,13 +103,13 @@ pub struct CryptDeviceFormatBuilder {
 impl CryptDeviceFormatBuilder {
     /// Set the iteration time for the `PBKDF2` function. Note that this does not affect the MK iterations.
     pub fn iteration_time(mut self, iteration_time_ms: u64) -> Self {
-        device::set_iteration_time(&mut self.cd, iteration_time_ms);
+        crate::device::set_iteration_time(&mut self.cd, iteration_time_ms);
         self
     }
 
     /// Set the random number generator to use
     pub fn rng_type(mut self, rng_type: raw::crypt_rng_type) -> Self {
-        device::set_rng_type(&mut self.cd, rng_type);
+        crate::device::set_rng_type(&mut self.cd, rng_type);
         self
     }
 
@@ -123,7 +122,7 @@ impl CryptDeviceFormatBuilder {
         mk_bits: usize,
         maybe_uuid: Option<&uuid::Uuid>,
     ) -> Result<CryptDeviceHandle<Luks1Params>> {
-        let _ = device::luks1_format(&mut self.cd, cipher, cipher_mode, hash, mk_bits, maybe_uuid)?;
+        let _ = crate::device::luks1_format(&mut self.cd, cipher, cipher_mode, hash, mk_bits, maybe_uuid)?;
         let params = load_luks1_params(&self.path)?;
         Ok(CryptDeviceHandle {
             cd: self.cd,
@@ -234,7 +233,7 @@ impl<P: fmt::Debug> fmt::Debug for CryptDeviceHandle<P> {
 
 impl<P: fmt::Debug> Drop for CryptDeviceHandle<P> {
     fn drop(&mut self) {
-        device::free(&mut self.cd);
+        crate::device::free(&mut self.cd);
         self.cd = ptr::null_mut();
     }
 }
@@ -245,31 +244,31 @@ impl<P: fmt::Debug> CryptDevice for CryptDeviceHandle<P> {
     }
 
     fn cipher(&self) -> &str {
-        device::cipher(&self.cd).expect("Initialised device should have cipher")
+        crate::device::cipher(&self.cd).expect("Initialised device should have cipher")
     }
 
     fn cipher_mode(&self) -> &str {
-        device::cipher_mode(&self.cd).expect("Initialised device should have cipher mode")
+        crate::device::cipher_mode(&self.cd).expect("Initialised device should have cipher mode")
     }
 
     fn device_name(&self) -> &str {
-        device::device_name(&self.cd).expect("Initialised device should have an underlying path")
+        crate::device::device_name(&self.cd).expect("Initialised device should have an underlying path")
     }
 
     fn rng_type(&self) -> raw::crypt_rng_type {
-        device::rng_type(&self.cd)
+        crate::device::rng_type(&self.cd)
     }
 
     fn set_rng_type(&mut self, rng_type: raw::crypt_rng_type) {
-        device::set_rng_type(&mut self.cd, rng_type)
+        crate::device::set_rng_type(&mut self.cd, rng_type)
     }
 
     fn set_iteration_time(&mut self, iteration_time_ms: u64) {
-        device::set_iteration_time(&mut self.cd, iteration_time_ms)
+        crate::device::set_iteration_time(&mut self.cd, iteration_time_ms)
     }
 
     fn volume_key_size(&self) -> u8 {
-        device::volume_key_size(&self.cd)
+        crate::device::volume_key_size(&self.cd)
     }
 }
 
@@ -307,7 +306,7 @@ impl Luks1Params {
 
 impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     fn activate(&mut self, name: &str, key: &[u8]) -> Result<Keyslot> {
-        device::luks_activate(&mut self.cd, name, key)
+        crate::device::luks_activate(&mut self.cd, name, key)
     }
 
     fn add_keyslot(
@@ -316,11 +315,11 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
         maybe_prev_key: Option<&[u8]>,
         maybe_keyslot: Option<Keyslot>,
     ) -> Result<Keyslot> {
-        device::luks_add_keyslot(&mut self.cd, key, maybe_prev_key, maybe_keyslot)
+        crate::device::luks_add_keyslot(&mut self.cd, key, maybe_prev_key, maybe_keyslot)
     }
 
     fn dump(&self) {
-        device::dump(&self.cd).expect("Dump should be fine for initialised device")
+        crate::device::dump(&self.cd).expect("Dump should be fine for initialised device")
     }
 
     fn hash_spec(&self) -> &str {
@@ -328,7 +327,7 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     }
 
     fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info {
-        device::keyslot_status(&self.cd, keyslot)
+        crate::device::keyslot_status(&self.cd, keyslot)
     }
 
     fn mk_bits(&self) -> u32 {
@@ -352,7 +351,7 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     }
 
     fn uuid(&self) -> uuid::Uuid {
-        device::uuid(&self.cd).expect("LUKS1 device should have UUID")
+        crate::device::uuid(&self.cd).expect("LUKS1 device should have UUID")
     }
 }
 

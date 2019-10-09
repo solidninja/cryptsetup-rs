@@ -4,28 +4,29 @@ description = "Rust wrapper around the libcryptsetup library, allowing manipulat
 homepage = "https://github.com/solidninja/cryptsetup-rs"
 license = "LGPL-3.0"
 name = "cryptsetup-rs"
-version = "0.2.0"
+version = "0.2.1"
+edition = "2018"
 
 [dependencies]
-errno = "0.2.3"
-libc = "0.2.42"
-log = "0.4.2"
+errno = "0.2.4"
+libc = "0.2.62"
+log = "0.4.8"
 
 [dependencies.blkid-rs]
 path = "blkid-rs"
-version = "0.1.1"
+version = "0.1.2"
 
 [dependencies.libcryptsetup-sys]
 path = "libcryptsetup-sys"
-version = "0.1.1"
+version = "0.1.2"
 
 [dependencies.uuid]
 features = ["v4"]
-version = "0.6.5"
+version = "0.7.4"
 
 [dev-dependencies]
-env_logger = "0.5.10"
-expectest = "0.10.0"
+env_logger = "0.7.0"
+expectest = "0.11.0"
 tempdir = "0.3.7"
 
 [lib]

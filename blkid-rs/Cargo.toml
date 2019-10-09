@@ -1,6 +1,6 @@
 [package]
 name = "blkid-rs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Vladimir Lushnikov <vladimir@solidninja.is>"]
 description = "Rust implementation of blkid for LUKS volumes"
 license = "LGPL-3.0"
@@ -11,9 +11,9 @@ edition = "2018"
 name = "blkid_rs"
 
 [dependencies]
-byteorder = "1.1"
-uuid = "0.6"
+byteorder = "1.3.2"
+uuid = "0.7.4"
 
 [dev-dependencies]
-env_logger = "0.4"
-tempdir = "0.3"
+env_logger = "0.7.0"
+tempdir = "0.3.7"

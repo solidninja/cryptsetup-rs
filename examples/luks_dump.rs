@@ -6,7 +6,7 @@ extern crate env_logger;
 use cryptsetup_rs::*;
 use std::env;
 
-fn dump_slot(crypt_device: &Luks1CryptDevice, slot: Keyslot) -> Result<()> {
+fn dump_slot(crypt_device: & dyn Luks1CryptDevice, slot: Keyslot) -> Result<()> {
     let status = match crypt_device.keyslot_status(slot) {
         crypt_keyslot_info::CRYPT_SLOT_INVALID => "INVALID",
         crypt_keyslot_info::CRYPT_SLOT_INACTIVE => "DISABLED",
