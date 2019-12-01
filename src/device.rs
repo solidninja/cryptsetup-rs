@@ -136,6 +136,15 @@ pub fn cipher_mode<'a>(cd: &'a RawDevice) -> Option<&'a str> {
     str_from_c_str(c_cipher_mode)
 }
 
+/// Deactivate crypt device, removing active device-mapper mapping from kernel.
+pub fn deactivate(cd: RawDevice, name: &str) -> Result<()> {
+    let c_name = ffi::CString::new(name).expect("name to cstr");
+    let res = unsafe {
+        raw::crypt_deactivate(cd, c_name.as_ptr())
+    };
+    check_crypt_error!(res)
+}
+
 /// Get the path to the device (as `libcryptsetup` sees it)
 pub fn device_name<'a>(cd: &'a RawDevice) -> Option<&'a str> {
     let c_device_name = unsafe { raw::crypt_get_device_name(*cd) };

@@ -165,6 +165,8 @@ pub trait CryptDeviceType {
     fn device_type(&self) -> raw::crypt_device_type;
 }
 
+// TODO: consider different state for activated device, this would require tracking status
+
 /// Trait representing specific operations on a LUKS1 device
 pub trait Luks1CryptDevice {
     /// Activate the crypt device, and give it the specified name
@@ -186,6 +188,9 @@ pub trait Luks1CryptDevice {
 
     /// Dump text-formatted information about the current device to stdout
     fn dump(&self);
+
+    /// Deactivate the crypt device, remove the device-mapper mapping and key information from kernel
+    fn deactivate(self, name: &str) -> Result<()>;
 
     /// Get the hash algorithm used
     fn hash_spec(&self) -> &str;
@@ -334,6 +339,10 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
 
     fn dump(&self) {
         crate::device::dump(&self.cd).expect("Dump should be fine for initialised device")
+    }
+
+    fn deactivate(self, name: &str) -> Result<()> {
+        crate::device::deactivate(self.cd, name)
     }
 
     fn hash_spec(&self) -> &str {
