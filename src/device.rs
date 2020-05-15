@@ -139,9 +139,7 @@ pub fn cipher_mode<'a>(cd: &'a RawDevice) -> Option<&'a str> {
 /// Deactivate crypt device, removing active device-mapper mapping from kernel.
 pub fn deactivate(cd: RawDevice, name: &str) -> Result<()> {
     let c_name = ffi::CString::new(name).expect("name to cstr");
-    let res = unsafe {
-        raw::crypt_deactivate(cd, c_name.as_ptr())
-    };
+    let res = unsafe { raw::crypt_deactivate(cd, c_name.as_ptr()) };
     check_crypt_error!(res)
 }
 

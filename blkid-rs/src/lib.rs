@@ -27,7 +27,7 @@ pub enum Error {
     InvalidMagic,
     InvalidStringEncoding(str::Utf8Error),
     InvalidVersion,
-    InvalidUuid(uuid::parser::ParseError),
+    InvalidUuid(uuid::Error),
     ReadError(io::Error),
     ReadIncorrectHeaderSize,
     HeaderProcessingError,
@@ -54,8 +54,8 @@ impl convert::From<str::Utf8Error> for Error {
     }
 }
 
-impl convert::From<uuid::parser::ParseError> for Error {
-    fn from(error: uuid::parser::ParseError) -> Error {
+impl convert::From<uuid::Error> for Error {
+    fn from(error: uuid::Error) -> Error {
         Error::InvalidUuid(error)
     }
 }
@@ -265,16 +265,13 @@ mod tests {
         assert_eq!(luks_header.key_bytes(), 32);
         assert_eq!(
             luks_header.mk_digest(),
-            &[
-                207, 94, 180, 192, 48, 113, 190, 213, 230, 144, 200, 71, 179, 0, 190, 186, 208, 53,
-                50, 113
-            ]
+            &[207, 94, 180, 192, 48, 113, 190, 213, 230, 144, 200, 71, 179, 0, 190, 186, 208, 53, 50, 113]
         );
         assert_eq!(
             luks_header.mk_digest_salt(),
             &[
-                112, 146, 12, 156, 169, 7, 82, 92, 121, 95, 68, 8, 98, 241, 230, 143, 12, 169, 53,
-                173, 219, 21, 43, 165, 215, 167, 191, 94, 150, 66, 144, 122
+                112, 146, 12, 156, 169, 7, 82, 92, 121, 95, 68, 8, 98, 241, 230, 143, 12, 169, 53, 173, 219, 21, 43,
+                165, 215, 167, 191, 94, 150, 66, 144, 122
             ]
         );
         assert_eq!(luks_header.mk_digest_iterations(), 1000);

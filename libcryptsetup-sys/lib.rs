@@ -18,8 +18,7 @@ pub enum crypt_log_level {
 
 pub type crypt_log_cb = extern "C" fn(crypt_log_level, *const c_char, *mut c_void);
 pub type crypt_confirm_cb = extern "C" fn(*const c_char, *mut c_void) -> c_int;
-pub type crypt_password_cb =
-    extern "C" fn(*const c_char, *mut c_char, size_t, *mut c_void) -> c_int;
+pub type crypt_password_cb = extern "C" fn(*const c_char, *mut c_char, size_t, *mut c_void) -> c_int;
 
 #[repr(i32)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -77,9 +76,9 @@ pub struct crypt_params_verity {
 #[repr(u32)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum crypt_verity_flag {
-    CRYPT_VERITY_NO_HEADER = (1 << 0),
-    CRYPT_VERITY_CHECK_HASH = (1 << 1),
-    CRYPT_VERITY_CREATE_HASH = (1 << 2),
+    CRYPT_VERITY_NO_HEADER = 1 << 0,
+    CRYPT_VERITY_CHECK_HASH = 1 << 1,
+    CRYPT_VERITY_CREATE_HASH = 1 << 2,
 }
 
 #[repr(C)]
@@ -98,11 +97,11 @@ pub struct crypt_params_tcrypt {
 #[repr(u32)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum crypt_tcrypt_flag {
-    CRYPT_TCRYPT_LEGACY_MODES = (1 << 0),
-    CRYPT_TCRYPT_HIDDEN_HEADER = (1 << 1),
-    CRYPT_TCRYPT_BACKUP_HEADER = (1 << 2),
-    CRYPT_TCRYPT_SYSTEM_HEADER = (1 << 3),
-    CRYPT_TCRYPT_VERA_MODES = (1 << 4),
+    CRYPT_TCRYPT_LEGACY_MODES = 1 << 0,
+    CRYPT_TCRYPT_HIDDEN_HEADER = 1 << 1,
+    CRYPT_TCRYPT_BACKUP_HEADER = 1 << 2,
+    CRYPT_TCRYPT_SYSTEM_HEADER = 1 << 3,
+    CRYPT_TCRYPT_VERA_MODES = 1 << 4,
 }
 
 pub const CRYPT_ANY_SLOT: c_int = -1;
@@ -110,17 +109,17 @@ pub const CRYPT_ANY_SLOT: c_int = -1;
 #[repr(u32)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum crypt_activation_flag {
-    CRYPT_ACTIVATE_READONLY = (1 << 0),
-    CRYPT_ACTIVATE_NO_UUID = (1 << 1),
-    CRYPT_ACTIVATE_SHARED = (1 << 2),
-    CRYPT_ACTIVATE_ALLOW_DISCARDS = (1 << 3),
-    CRYPT_ACTIVATE_PRIVATE = (1 << 4),
-    CRYPT_ACTIVATE_CORRUPTED = (1 << 5),
-    CRYPT_ACTIVATE_SAME_CPU_CRYPT = (1 << 6),
-    CRYPT_ACTIVATE_SUBMIT_FROM_CRYPT_CPUS = (1 << 7),
-    CRYPT_ACTIVATE_IGNORE_CORRUPTION = (1 << 8),
-    CRYPT_ACTIVATE_RESTART_ON_CORRUPTION = (1 << 9),
-    CRYPT_ACTIVATE_IGNORE_ZERO_BLOCKS = (1 << 10),
+    CRYPT_ACTIVATE_READONLY = 1 << 0,
+    CRYPT_ACTIVATE_NO_UUID = 1 << 1,
+    CRYPT_ACTIVATE_SHARED = 1 << 2,
+    CRYPT_ACTIVATE_ALLOW_DISCARDS = 1 << 3,
+    CRYPT_ACTIVATE_PRIVATE = 1 << 4,
+    CRYPT_ACTIVATE_CORRUPTED = 1 << 5,
+    CRYPT_ACTIVATE_SAME_CPU_CRYPT = 1 << 6,
+    CRYPT_ACTIVATE_SUBMIT_FROM_CRYPT_CPUS = 1 << 7,
+    CRYPT_ACTIVATE_IGNORE_CORRUPTION = 1 << 8,
+    CRYPT_ACTIVATE_RESTART_ON_CORRUPTION = 1 << 9,
+    CRYPT_ACTIVATE_IGNORE_ZERO_BLOCKS = 1 << 10,
 }
 
 #[repr(C)]
@@ -165,24 +164,12 @@ extern "C" {
     ) -> c_int;
     pub fn crypt_init_by_name(cd: *mut *mut crypt_device, name: *const c_char) -> c_int;
 
-    pub fn crypt_set_log_callback(
-        cd: *mut crypt_device,
-        log: Option<crypt_log_cb>,
-        usrptr: *mut c_void,
-    );
+    pub fn crypt_set_log_callback(cd: *mut crypt_device, log: Option<crypt_log_cb>, usrptr: *mut c_void);
     pub fn crypt_log(cd: *mut crypt_device, level: crypt_log_level, msg: *const c_char);
 
-    pub fn crypt_set_confirm_callback(
-        cd: *mut crypt_device,
-        confirm: crypt_confirm_cb,
-        usrptr: *mut c_void,
-    );
+    pub fn crypt_set_confirm_callback(cd: *mut crypt_device, confirm: crypt_confirm_cb, usrptr: *mut c_void);
     #[deprecated]
-    pub fn crypt_set_password_callback(
-        cd: *mut crypt_device,
-        password: crypt_password_cb,
-        usrptr: *mut c_void,
-    );
+    pub fn crypt_set_password_callback(cd: *mut crypt_device, password: crypt_password_cb, usrptr: *mut c_void);
     #[deprecated]
     pub fn crypt_set_timeout(cd: *mut crypt_device, timeout: u64);
     #[deprecated]
@@ -212,17 +199,9 @@ extern "C" {
 
     pub fn crypt_set_uuid(cd: *mut crypt_device, uuid: *const c_char) -> c_int;
 
-    pub fn crypt_load(
-        cd: *mut crypt_device,
-        requested_type: *const c_char,
-        params: *mut c_void,
-    ) -> c_int;
+    pub fn crypt_load(cd: *mut crypt_device, requested_type: *const c_char, params: *mut c_void) -> c_int;
 
-    pub fn crypt_repair(
-        cd: *mut crypt_device,
-        requested_type: *const c_char,
-        params: *mut c_void,
-    ) -> c_int;
+    pub fn crypt_repair(cd: *mut crypt_device, requested_type: *const c_char, params: *mut c_void) -> c_int;
 
     pub fn crypt_resize(cd: *mut crypt_device, name: *const c_char, new_size: u64) -> c_int;
 
@@ -301,11 +280,7 @@ extern "C" {
 
     pub fn crypt_keyslot_destroy(cd: *mut crypt_device, keyslot: c_int) -> c_int;
 
-    pub fn crypt_get_active_device(
-        cd: *mut crypt_device,
-        name: *const c_char,
-        cad: *mut crypt_active_device,
-    ) -> c_int;
+    pub fn crypt_get_active_device(cd: *mut crypt_device, name: *const c_char, cad: *mut crypt_active_device) -> c_int;
 
     pub fn crypt_activate_by_passphrase(
         cd: *mut crypt_device,
@@ -353,11 +328,7 @@ extern "C" {
         passphrase_size: size_t,
     ) -> c_int;
 
-    pub fn crypt_volume_key_verify(
-        cd: *mut crypt_device,
-        volume_key: *const c_char,
-        volume_key_size: size_t,
-    ) -> c_int;
+    pub fn crypt_volume_key_verify(cd: *mut crypt_device, volume_key: *const c_char, volume_key_size: size_t) -> c_int;
 
     pub fn crypt_status(cd: *mut crypt_device, name: *const c_char) -> crypt_status_info;
 
@@ -397,12 +368,7 @@ extern "C" {
 
     pub fn crypt_keyslot_max(crypt_device_type: *const c_char) -> c_int;
 
-    pub fn crypt_keyslot_area(
-        cd: *mut crypt_device,
-        keyslot: c_int,
-        offset: *mut u64,
-        length: *mut u64,
-    ) -> c_int;
+    pub fn crypt_keyslot_area(cd: *mut crypt_device, keyslot: c_int, offset: *mut u64, length: *mut u64) -> c_int;
 
     pub fn crypt_header_backup(
         cd: *mut crypt_device,
@@ -460,26 +426,11 @@ mod tests {
 
     #[test]
     fn test_device_type_conversion() {
-        assert_eq!(
-            Ok(crypt_device_type::PLAIN),
-            crypt_device_type::from_str("PLAIN")
-        );
-        assert_eq!(
-            Ok(crypt_device_type::LUKS1),
-            crypt_device_type::from_str("LUKS1")
-        );
-        assert_eq!(
-            Ok(crypt_device_type::LOOPAES),
-            crypt_device_type::from_str("LOOPAES")
-        );
-        assert_eq!(
-            Ok(crypt_device_type::VERITY),
-            crypt_device_type::from_str("VERITY")
-        );
-        assert_eq!(
-            Ok(crypt_device_type::TCRYPT),
-            crypt_device_type::from_str("TCRYPT")
-        );
+        assert_eq!(Ok(crypt_device_type::PLAIN), crypt_device_type::from_str("PLAIN"));
+        assert_eq!(Ok(crypt_device_type::LUKS1), crypt_device_type::from_str("LUKS1"));
+        assert_eq!(Ok(crypt_device_type::LOOPAES), crypt_device_type::from_str("LOOPAES"));
+        assert_eq!(Ok(crypt_device_type::VERITY), crypt_device_type::from_str("VERITY"));
+        assert_eq!(Ok(crypt_device_type::TCRYPT), crypt_device_type::from_str("TCRYPT"));
     }
 
     #[test]

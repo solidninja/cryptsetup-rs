@@ -6,7 +6,6 @@ extern crate log;
 extern crate tempfile;
 extern crate uuid;
 
-#[macro_use]
 extern crate expectest;
 
 use std::process::Command;
