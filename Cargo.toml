@@ -12,9 +12,9 @@ edition = "2018"
 gitlab = { repository = "solidninja/cryptsetup-rs" }
 
 [dependencies]
-errno = "0.2.5"
-libc = "0.2.70"
-log = "0.4.8"
+errno = "0.2"
+libc = "0.2"
+log = "0.4"
 
 [dependencies.blkid-rs]
 path = "blkid-rs"
@@ -35,3 +35,6 @@ tempfile = "3.1.0"
 
 [lib]
 name = "cryptsetup_rs"
+
+[workspace]
+members = ["blkid-rs", "libcryptsetup-sys", "systest"]

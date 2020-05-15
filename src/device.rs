@@ -83,6 +83,7 @@ pub extern "C" fn cryptsetup_rs_log_callback(
         raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg.trim_end()),
         raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_end()),
         raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG_JSON => debug!("{}", msg.trim_end()), // TODO - really?
     }
 }
 
@@ -298,6 +299,7 @@ pub fn rng_type(cd: &RawDevice) -> raw::crypt_rng_type {
 /// Set the number of milliseconds for `PBKDF2` function iteration
 pub fn set_iteration_time(cd: &mut RawDevice, iteration_time_ms: u64) {
     unsafe {
+        #[allow(deprecated)] // FIXME
         raw::crypt_set_iteration_time(*cd, iteration_time_ms);
     }
 }

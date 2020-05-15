@@ -6,6 +6,8 @@
 
 A safe binding to `libcryptsetup` that allows working with encrypted disks on Linux.
 
+Requires `libcryptetup >= 2.0.0` to compile.
+
 Features:
   * High-level API for open/format/other operations
 

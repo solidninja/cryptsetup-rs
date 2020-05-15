@@ -12,7 +12,7 @@ before_script:
 
 .build-steps: &build-steps
   - cargo build --all-targets --verbose
-  - cargo test --verbose
+  - cargo test --all --verbose
 
 rust-latest:
   stage: build

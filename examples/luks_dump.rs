@@ -11,6 +11,7 @@ fn dump_slot(crypt_device: &dyn Luks1CryptDevice, slot: Keyslot) -> Result<()> {
         crypt_keyslot_info::CRYPT_SLOT_INVALID => "INVALID",
         crypt_keyslot_info::CRYPT_SLOT_INACTIVE => "DISABLED",
         crypt_keyslot_info::CRYPT_SLOT_ACTIVE | crypt_keyslot_info::CRYPT_SLOT_ACTIVE_LAST => "ENABLED",
+        crypt_keyslot_info::CRYPT_SLOT_UNBOUND => "UNBOUND",
     };
 
     println!("Key Slot {}: {}", slot, status);
