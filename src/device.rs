@@ -26,6 +26,8 @@ pub enum Error {
     IOError(::std::io::Error),
     /// Error from the blkid-rs library (while reading LUKS1 header)
     BlkidError(blkid_rs::Error),
+    /// The operation tried was not valid for the LUKS version
+    InvalidLuksVersion,
 }
 
 impl From<::std::io::Error> for Error {
@@ -84,15 +86,6 @@ pub extern "C" fn cryptsetup_rs_log_callback(
         raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_end()),
         raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_end()),
         raw::crypt_log_level::CRYPT_LOG_DEBUG_JSON => debug!("{}", msg.trim_end()), // TODO - really?
-    }
-}
-
-/// Enable internal `libcryptsetup` debugging
-pub fn enable_debug(debug: bool) {
-    if debug {
-        unsafe { raw::crypt_set_debug_level(raw::crypt_debug_level::CRYPT_DEBUG_ALL) };
-    } else {
-        unsafe { raw::crypt_set_debug_level(raw::crypt_debug_level::CRYPT_DEBUG_NONE) };
     }
 }
 

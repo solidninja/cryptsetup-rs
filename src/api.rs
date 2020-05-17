@@ -1,19 +1,24 @@
 //! High-level API to work with `libcryptsetup` supported devices (disks)
+//! The main focus is on LUKS1 and LUKS2 devices
 
 use std::fmt;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
-use blkid_rs::{BlockDevice, LuksHeader};
+use blkid_rs::{Luks1Header, Luks2Header, LuksHeader, LuksVersionedHeader};
 
-pub use crate::device::enable_debug;
 use crate::device::RawDevice;
 pub use crate::device::{Error, Keyslot, Result};
+pub use crate::global::enable_debug;
+use either::Either;
+use either::Either::{Left, Right};
 use raw;
 use uuid;
+use uuid::Uuid;
 
 pub type Luks1CryptDeviceHandle = CryptDeviceHandle<Luks1Params>;
+pub type Luks2CryptDeviceHandle = CryptDeviceHandle<Luks2Params>;
 
 /// Builder to open a crypt device at the specified path
 ///
@@ -61,18 +66,42 @@ pub fn format<P: AsRef<Path>>(path: P) -> Result<CryptDeviceFormatBuilder> {
     })
 }
 
-/// Read the UUID of a LUKS1 container without opening the device
-pub fn luks1_uuid<P: AsRef<Path>>(path: P) -> Result<uuid::Uuid> {
+/// Read the LUKS version used by a LUKS container without opening the device
+pub fn luks_version<P: AsRef<Path>>(path: P) -> Result<u16> {
     let device_file = File::open(path.as_ref())?;
-    let luks_phdr = BlockDevice::read_luks_header(device_file)?;
-    let uuid = luks_phdr.uuid()?;
+    let header = LuksHeader::read(device_file)?;
+    Ok(header.version())
+}
+
+/// Read the LUKS version used by a LUKS container without opening the device
+pub fn luks_uuid<P: AsRef<Path>>(path: P) -> Result<uuid::Uuid> {
+    let device_file = File::open(path.as_ref())?;
+    let uuid = LuksHeader::read(device_file)?.uuid()?;
     Ok(uuid)
+}
+
+/// Read the UUID of a LUKS1 container without opening the device
+///
+/// Please use `luks_uuid()` instead
+#[deprecated]
+pub fn luks1_uuid<P: AsRef<Path>>(path: P) -> Result<uuid::Uuid> {
+    luks_uuid(path)
 }
 
 fn load_luks1_params<P: AsRef<Path>>(path: P) -> Result<Luks1Params> {
     let device_file = File::open(path.as_ref())?;
-    let luks_phdr = BlockDevice::read_luks_header(device_file)?;
-    Luks1Params::from(luks_phdr)
+    match LuksHeader::read(device_file)? {
+        LuksHeader::Luks1(v1) => Luks1Params::from(v1),
+        _ => Err(Error::InvalidLuksVersion),
+    }
+}
+
+fn load_luks2_params<P: AsRef<Path>>(path: P) -> Result<Luks2Params> {
+    let device_file = File::open(path.as_ref())?;
+    match LuksHeader::read(device_file)? {
+        LuksHeader::Luks2(v2) => Luks2Params::from(v2),
+        _ => Err(Error::InvalidLuksVersion),
+    }
 }
 
 /// Struct containing state for the `open()` builder
@@ -91,6 +120,27 @@ impl CryptDeviceOpenBuilder {
             path: self.path,
             params,
         })
+    }
+
+    /// Loads an existing LUKS2 crypt device
+    pub fn luks2(self: CryptDeviceOpenBuilder) -> Result<CryptDeviceHandle<Luks2Params>> {
+        let _ = crate::device::load(&self.cd, raw::crypt_device_type::LUKS2);
+        let params = load_luks2_params(&self.path)?;
+        Ok(CryptDeviceHandle {
+            cd: self.cd,
+            path: self.path,
+            params,
+        })
+    }
+
+    pub fn luks(
+        self: CryptDeviceOpenBuilder,
+    ) -> Result<Either<CryptDeviceHandle<Luks1Params>, CryptDeviceHandle<Luks2Params>>> {
+        match luks_version(&self.path)? {
+            1 => self.luks1().map(|d| Left(d)),
+            2 => self.luks2().map(|d| Right(d)),
+            _ => Err(Error::InvalidLuksVersion),
+        }
     }
 }
 
@@ -167,11 +217,28 @@ pub trait CryptDeviceType {
 
 // TODO: consider different state for activated device, this would require tracking status
 
-/// Trait representing specific operations on a LUKS1 device
-pub trait Luks1CryptDevice {
+pub trait LuksCryptDevice: CryptDevice + CryptDeviceType {
     /// Activate the crypt device, and give it the specified name
     fn activate(&mut self, name: &str, key: &[u8]) -> Result<Keyslot>;
 
+    /// Deactivate the crypt device, remove the device-mapper mapping and key information from kernel
+    fn deactivate(self, name: &str) -> Result<()>;
+
+    /// Destroy (and disable) key slot
+    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()>;
+
+    /// Get status of key slot
+    fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info;
+
+    /// Dump text-formatted information about the current device to stdout
+    fn dump(&self);
+
+    /// UUID of the current device
+    fn uuid(&self) -> uuid::Uuid;
+}
+
+/// Trait representing specific operations on a LUKS1 device
+pub trait Luks1CryptDevice: LuksCryptDevice {
     /// Add a new keyslot with the specified key
     fn add_keyslot(
         &mut self,
@@ -183,20 +250,8 @@ pub trait Luks1CryptDevice {
     /// Replace an old key with a new one
     fn update_keyslot(&mut self, key: &[u8], prev_key: &[u8], maybe_keyslot: Option<Keyslot>) -> Result<Keyslot>;
 
-    /// Destroy (and disable) key slot
-    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()>;
-
-    /// Dump text-formatted information about the current device to stdout
-    fn dump(&self);
-
-    /// Deactivate the crypt device, remove the device-mapper mapping and key information from kernel
-    fn deactivate(self, name: &str) -> Result<()>;
-
     /// Get the hash algorithm used
     fn hash_spec(&self) -> &str;
-
-    /// Get status of key slot
-    fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info;
 
     /// Number of bits in the master key
     fn mk_bits(&self) -> u32;
@@ -212,10 +267,10 @@ pub trait Luks1CryptDevice {
 
     /// Get the offset of the payload
     fn payload_offset(&self) -> u32;
-
-    /// UUID of the current device
-    fn uuid(&self) -> uuid::Uuid;
 }
+
+/// Trait representing specific operations on a LUKS2 device
+pub trait Luks2CryptDevice: LuksCryptDevice {}
 
 /// An opaque handle on an initialized crypt device
 #[derive(PartialEq)]
@@ -295,7 +350,7 @@ pub struct Luks1Params {
 }
 
 impl Luks1Params {
-    fn from(header: impl LuksHeader) -> Result<Luks1Params> {
+    fn from(header: impl Luks1Header) -> Result<Luks1Params> {
         let hash_spec = header.hash_spec()?.to_owned();
         let payload_offset = header.payload_offset();
         let mk_bits = header.key_bytes() * 8;
@@ -315,11 +370,33 @@ impl Luks1Params {
     }
 }
 
-impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
+impl LuksCryptDevice for CryptDeviceHandle<Luks1Params> {
     fn activate(&mut self, name: &str, key: &[u8]) -> Result<Keyslot> {
         crate::device::luks_activate(&mut self.cd, name, key)
     }
 
+    fn deactivate(self, name: &str) -> Result<()> {
+        crate::device::deactivate(self.cd, name)
+    }
+
+    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()> {
+        crate::device::luks_destroy_keyslot(&mut self.cd, slot)
+    }
+
+    fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info {
+        crate::device::keyslot_status(&self.cd, keyslot)
+    }
+
+    fn dump(&self) {
+        crate::device::dump(&self.cd).expect("Dump should be fine for initialised device")
+    }
+
+    fn uuid(&self) -> Uuid {
+        crate::device::uuid(&self.cd).expect("Initialised device should have UUID")
+    }
+}
+
+impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     fn add_keyslot(
         &mut self,
         key: &[u8],
@@ -333,24 +410,8 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
         crate::device::luks_update_keyslot(&mut self.cd, key, prev_key, maybe_keyslot)
     }
 
-    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()> {
-        crate::device::luks_destroy_keyslot(&mut self.cd, slot)
-    }
-
-    fn dump(&self) {
-        crate::device::dump(&self.cd).expect("Dump should be fine for initialised device")
-    }
-
-    fn deactivate(self, name: &str) -> Result<()> {
-        crate::device::deactivate(self.cd, name)
-    }
-
     fn hash_spec(&self) -> &str {
         self.params.hash_spec.as_ref()
-    }
-
-    fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info {
-        crate::device::keyslot_status(&self.cd, keyslot)
     }
 
     fn mk_bits(&self) -> u32 {
@@ -372,14 +433,72 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     fn payload_offset(&self) -> u32 {
         self.params.payload_offset
     }
-
-    fn uuid(&self) -> uuid::Uuid {
-        crate::device::uuid(&self.cd).expect("LUKS1 device should have UUID")
-    }
 }
 
 impl CryptDeviceType for CryptDeviceHandle<Luks1Params> {
     fn device_type(&self) -> raw::crypt_device_type {
         raw::crypt_device_type::LUKS1
+    }
+}
+
+/// Struct for storing LUKS2 parameters in memory
+#[derive(Debug, PartialEq)]
+pub struct Luks2Params {
+    label: Option<String>,
+    subsystem: Option<String>,
+    seqid: u64,
+    header_size: u64,
+    header_offset: u64,
+    // TODO do we need to expose others?
+}
+
+impl Luks2Params {
+    fn from(header: impl Luks2Header) -> Result<Luks2Params> {
+        let label = header.label()?.map(|s| s.to_owned());
+        let subsystem = header.subsystem()?.map(|s| s.to_owned());
+        let seqid = header.seqid();
+        let header_size = header.header_size();
+        let header_offset = header.header_offset();
+        Ok(Luks2Params {
+            label,
+            subsystem,
+            seqid,
+            header_size,
+            header_offset,
+        })
+    }
+}
+
+impl LuksCryptDevice for CryptDeviceHandle<Luks2Params> {
+    fn activate(&mut self, name: &str, key: &[u8]) -> Result<u8> {
+        crate::device::luks_activate(&mut self.cd, name, key)
+    }
+
+    fn deactivate(self, name: &str) -> Result<()> {
+        crate::device::deactivate(self.cd, name)
+    }
+
+    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()> {
+        crate::device::luks_destroy_keyslot(&mut self.cd, slot)
+    }
+
+    fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info {
+        crate::device::keyslot_status(&self.cd, keyslot)
+    }
+
+    fn dump(&self) {
+        crate::device::dump(&self.cd).expect("Dump should be fine for initialised device")
+    }
+
+    fn uuid(&self) -> Uuid {
+        crate::device::uuid(&self.cd).expect("Initialised device should have UUID")
+    }
+}
+
+impl Luks2CryptDevice for CryptDeviceHandle<Luks2Params> {}
+
+impl CryptDeviceType for CryptDeviceHandle<Luks2Params> {
+    fn device_type(&self) -> raw::crypt_device_type {
+        raw::crypt_device_type::LUKS2
     }
 }

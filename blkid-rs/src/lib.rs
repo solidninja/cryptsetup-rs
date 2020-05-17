@@ -51,8 +51,8 @@ pub enum LuksHeader {
 }
 
 impl LuksHeader {
-    pub fn read<R: Read>(reader: &mut R) -> Result<LuksHeader, Error> {
-        let res = match raw::read_luks_header(reader)? {
+    pub fn read<R: Read>(mut reader: R) -> Result<LuksHeader, Error> {
+        let res = match raw::read_luks_header(&mut reader)? {
             Left(raw) => LuksHeader::Luks1(LuksHeaderV1 { raw }),
             Right(raw) => LuksHeader::Luks2(LuksHeaderV2 { raw }),
         };
@@ -155,10 +155,38 @@ impl Luks1Header for LuksHeaderV1 {
 }
 
 pub trait Luks2Header: LuksVersionedHeader {
+    fn label(&self) -> Result<Option<&str>, Error>;
+    fn subsystem(&self) -> Result<Option<&str>, Error>;
+    fn seqid(&self) -> u64;
+    fn header_size(&self) -> u64;
+    fn header_offset(&self) -> u64;
+
     // TODO add luks2 specifics (however the json header structure is not neccessary at the moment so not read)
 }
 
-impl Luks2Header for LuksHeaderV2 {}
+impl Luks2Header for LuksHeaderV2 {
+    fn label(&self) -> Result<Option<&str>, Error> {
+        let label_opt = raw::u8_buf_to_str(&self.raw.label)?;
+        Ok(label_opt)
+    }
+
+    fn subsystem(&self) -> Result<Option<&str>, Error> {
+        let subsystem_opt = raw::u8_buf_to_str(&self.raw.subsystem)?;
+        Ok(subsystem_opt)
+    }
+
+    fn seqid(&self) -> u64 {
+        self.raw.seqid
+    }
+
+    fn header_size(&self) -> u64 {
+        self.raw.hdr_size
+    }
+
+    fn header_offset(&self) -> u64 {
+        self.raw.hdr_offset
+    }
+}
 
 impl convert::From<str::Utf8Error> for Error {
     fn from(error: str::Utf8Error) -> Error {
@@ -213,6 +241,7 @@ mod raw {
 
     const LUKS2_PHDR_PADDING_L: usize = 184;
 
+    // note: these are not packed because it's unsafe to take a slice
     #[repr(C)]
     pub struct luks_phdr {
         pub magic: [u8; LUKS_MAGIC_L],
