@@ -6,16 +6,20 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
-use blkid_rs::{Luks1Header, Luks2Header, LuksHeader, LuksVersionedHeader};
-
-use crate::device::RawDevice;
-pub use crate::device::{Error, Keyslot, Result};
-pub use crate::global::enable_debug;
 use either::Either;
 use either::Either::{Left, Right};
-use raw;
 use uuid;
-use uuid::Uuid;
+
+use blkid_rs::{LuksHeader, LuksVersionedHeader};
+use raw;
+pub use raw::crypt_pbkdf_algo_type;
+
+pub use crate::device::{Error, Keyslot, Result};
+use crate::device::{Luks2FormatPbkdf, RawDevice};
+pub use crate::global::enable_debug;
+use crate::luks1::Luks1Params;
+use crate::luks2::Luks2Params;
+pub use crate::luks2_meta::Luks2Metadata;
 
 pub type Luks1CryptDeviceHandle = CryptDeviceHandle<Luks1Params>;
 pub type Luks2CryptDeviceHandle = CryptDeviceHandle<Luks2Params>;
@@ -58,6 +62,23 @@ pub fn open<P: AsRef<Path>>(path: P) -> Result<CryptDeviceOpenBuilder> {
 /// # Ok(())
 /// # }
 /// ```
+///
+/// For LUKS2:
+///
+/// ```
+/// # extern crate cryptsetup_rs;
+/// use cryptsetup_rs::*;
+///
+/// # fn foo() -> Result<()> {
+/// let device = format("/dev/loop0")?
+///     .luks2("aes", "xts-plain", 256, None, None, None)
+///     .label("test")
+///     .argon2i("sha256", 200, 1, 1024, 1)
+///     .start();
+/// # Ok(())
+/// # }
+/// ```
+///
 pub fn format<P: AsRef<Path>>(path: P) -> Result<CryptDeviceFormatBuilder> {
     let cd = crate::device::init(path.as_ref())?;
     Ok(CryptDeviceFormatBuilder {
@@ -88,22 +109,6 @@ pub fn luks1_uuid<P: AsRef<Path>>(path: P) -> Result<uuid::Uuid> {
     luks_uuid(path)
 }
 
-fn load_luks1_params<P: AsRef<Path>>(path: P) -> Result<Luks1Params> {
-    let device_file = File::open(path.as_ref())?;
-    match LuksHeader::read(device_file)? {
-        LuksHeader::Luks1(v1) => Luks1Params::from(v1),
-        _ => Err(Error::InvalidLuksVersion),
-    }
-}
-
-fn load_luks2_params<P: AsRef<Path>>(path: P) -> Result<Luks2Params> {
-    let device_file = File::open(path.as_ref())?;
-    match LuksHeader::read(device_file)? {
-        LuksHeader::Luks2(v2) => Luks2Params::from(v2),
-        _ => Err(Error::InvalidLuksVersion),
-    }
-}
-
 /// Struct containing state for the `open()` builder
 pub struct CryptDeviceOpenBuilder {
     path: PathBuf,
@@ -114,7 +119,7 @@ impl CryptDeviceOpenBuilder {
     /// Loads an existing LUKS1 crypt device
     pub fn luks1(self: CryptDeviceOpenBuilder) -> Result<CryptDeviceHandle<Luks1Params>> {
         let _ = crate::device::load(&self.cd, raw::crypt_device_type::LUKS1);
-        let params = load_luks1_params(&self.path)?;
+        let params = Luks1Params::from_path(&self.path)?;
         Ok(CryptDeviceHandle {
             cd: self.cd,
             path: self.path,
@@ -125,7 +130,7 @@ impl CryptDeviceOpenBuilder {
     /// Loads an existing LUKS2 crypt device
     pub fn luks2(self: CryptDeviceOpenBuilder) -> Result<CryptDeviceHandle<Luks2Params>> {
         let _ = crate::device::load(&self.cd, raw::crypt_device_type::LUKS2);
-        let params = load_luks2_params(&self.path)?;
+        let params = Luks2Params::from_path(&self.path)?;
         Ok(CryptDeviceHandle {
             cd: self.cd,
             path: self.path,
@@ -150,9 +155,132 @@ pub struct CryptDeviceFormatBuilder {
     cd: RawDevice,
 }
 
+#[derive(Default)]
+struct Luks2FormatBuilderParams<'a> {
+    label: Option<&'a str>,
+    subsystem: Option<&'a str>,
+    data_device: Option<&'a Path>,
+    pbkdf: Option<Luks2FormatPbkdf<'a>>,
+}
+
+pub struct CryptDeviceLuks2FormatBuilder<'a> {
+    path: PathBuf,
+    cd: RawDevice,
+    // common params
+    cipher: &'a str,
+    cipher_mode: &'a str,
+    mk_bits: usize,
+    maybe_uuid: Option<&'a uuid::Uuid>,
+    // luks2 specifics
+    data_alignment: usize,
+    sector_size: u32,
+    other: Luks2FormatBuilderParams<'a>,
+}
+
+impl<'a> CryptDeviceLuks2FormatBuilder<'a> {
+    /// Set device primary label
+    pub fn label(mut self, label: &'a str) -> Self {
+        self.other.label = Some(label);
+        self
+    }
+
+    /// Set device secondary label, 'subsystem'
+    pub fn subsystem(mut self, subsystem: &'a str) -> Self {
+        self.other.subsystem = Some(subsystem);
+        self
+    }
+
+    /// Set path to data device (this will result in a split header)
+    pub fn data_device(mut self, p: &'a Path) -> Self {
+        self.other.data_device = Some(p);
+        self
+    }
+
+    /// Set PBKDF parameters for pbkdf2
+    pub fn pbkdf2(mut self, hash: &'a str, time_ms: u32, iterations: u32) -> Self {
+        self.other.pbkdf = Some(Luks2FormatPbkdf {
+            type_: crypt_pbkdf_algo_type::pbkdf2,
+            hash,
+            time_ms,
+            iterations,
+            max_memory_kb: 0,
+            parallel_threads: 0,
+            flags: 0,
+        });
+        self
+    }
+
+    /// Set PBKDF parameters for argon2i
+    pub fn argon2i(
+        mut self,
+        hash: &'a str,
+        time_ms: u32,
+        iterations: u32,
+        max_memory_kb: u32,
+        parallel_threads: u32,
+    ) -> Self {
+        self.other.pbkdf = Some(Luks2FormatPbkdf {
+            type_: crypt_pbkdf_algo_type::argon2i,
+            hash,
+            time_ms,
+            iterations,
+            max_memory_kb,
+            parallel_threads,
+            flags: 0,
+        });
+        self
+    }
+
+    /// Set PBKDF parameters for argon2id
+    pub fn argon2id(
+        mut self,
+        hash: &'a str,
+        time_ms: u32,
+        iterations: u32,
+        max_memory_kb: u32,
+        parallel_threads: u32,
+    ) -> Self {
+        self.other.pbkdf = Some(Luks2FormatPbkdf {
+            type_: crypt_pbkdf_algo_type::argon2id,
+            hash,
+            time_ms,
+            iterations,
+            max_memory_kb,
+            parallel_threads,
+            flags: 0,
+        });
+        self
+    }
+
+    /// Format a new block device as a LUKS2 crypt device with specified parameters
+    pub fn start(mut self) -> Result<CryptDeviceHandle<Luks2Params>> {
+        let _ = crate::device::luks2_format(
+            &mut self.cd,
+            self.cipher,
+            self.cipher_mode,
+            self.mk_bits,
+            self.data_alignment,
+            self.sector_size,
+            self.other.label,
+            self.other.subsystem,
+            self.other.data_device,
+            self.maybe_uuid,
+            self.other.pbkdf.as_ref(),
+            None,
+        )?;
+        let params = Luks2Params::from_path(&self.path)?;
+        Ok(CryptDeviceHandle {
+            cd: self.cd,
+            path: self.path,
+            params,
+        })
+    }
+}
+
 impl CryptDeviceFormatBuilder {
     /// Set the iteration time for the `PBKDF2` function. Note that this does not affect the MK iterations.
     pub fn iteration_time(mut self, iteration_time_ms: u64) -> Self {
+        #[allow(deprecated)]
         crate::device::set_iteration_time(&mut self.cd, iteration_time_ms);
         self
     }
@@ -173,12 +301,35 @@ impl CryptDeviceFormatBuilder {
         maybe_uuid: Option<&uuid::Uuid>,
     ) -> Result<CryptDeviceHandle<Luks1Params>> {
         let _ = crate::device::luks1_format(&mut self.cd, cipher, cipher_mode, hash, mk_bits, maybe_uuid)?;
-        let params = load_luks1_params(&self.path)?;
+        let params = Luks1Params::from_path(&self.path)?;
         Ok(CryptDeviceHandle {
             cd: self.cd,
             path: self.path,
             params,
         })
+    }
+
+    /// Set the format to LUKS2, and build further options
+    pub fn luks2<'a>(
+        self: CryptDeviceFormatBuilder,
+        cipher: &'a str,
+        cipher_mode: &'a str,
+        mk_bits: usize,
+        maybe_uuid: Option<&'a uuid::Uuid>,
+        maybe_data_alignment: Option<u32>,
+        maybe_sector_size: Option<u32>,
+    ) -> CryptDeviceLuks2FormatBuilder<'a> {
+        CryptDeviceLuks2FormatBuilder {
+            path: self.path,
+            cd: self.cd,
+            cipher,
+            cipher_mode,
+            mk_bits,
+            maybe_uuid,
+            data_alignment: maybe_data_alignment.unwrap_or(0) as usize,
+            sector_size: maybe_sector_size.unwrap_or(512),
+            other: Default::default(),
+        }
     }
 }
 
@@ -276,13 +427,13 @@ pub trait Luks2CryptDevice: LuksCryptDevice {}
 #[derive(PartialEq)]
 pub struct CryptDeviceHandle<P: fmt::Debug> {
     /// Pointer to the raw device
-    cd: RawDevice,
+    pub(crate) cd: RawDevice,
 
     /// Path to the crypt device (useful for diagnostics)
-    path: PathBuf,
+    pub(crate) path: PathBuf,
 
     /// Additional parameters depending on type of crypt device opened
-    params: P,
+    pub(crate) params: P,
 }
 
 impl<P: fmt::Debug> fmt::Debug for CryptDeviceHandle<P> {
@@ -330,175 +481,11 @@ impl<P: fmt::Debug> CryptDevice for CryptDeviceHandle<P> {
     }
 
     fn set_iteration_time(&mut self, iteration_time_ms: u64) {
+        #[allow(deprecated)]
         crate::device::set_iteration_time(&mut self.cd, iteration_time_ms)
     }
 
     fn volume_key_size(&self) -> u8 {
         crate::device::volume_key_size(&self.cd)
-    }
-}
-
-/// Struct for storing LUKS1 parameters in memory
-#[derive(Debug, PartialEq)]
-pub struct Luks1Params {
-    hash_spec: String,
-    payload_offset: u32,
-    mk_bits: u32,
-    mk_digest: [u8; 20],
-    mk_salt: [u8; 32],
-    mk_iterations: u32,
-}
-
-impl Luks1Params {
-    fn from(header: impl Luks1Header) -> Result<Luks1Params> {
-        let hash_spec = header.hash_spec()?.to_owned();
-        let payload_offset = header.payload_offset();
-        let mk_bits = header.key_bytes() * 8;
-        let mut mk_digest = [0u8; 20];
-        mk_digest.copy_from_slice(header.mk_digest());
-        let mut mk_salt = [0u8; 32];
-        mk_salt.copy_from_slice(header.mk_digest_salt());
-        let mk_iterations = header.mk_digest_iterations();
-        Ok(Luks1Params {
-            hash_spec,
-            payload_offset,
-            mk_bits,
-            mk_digest,
-            mk_salt,
-            mk_iterations,
-        })
-    }
-}
-
-impl LuksCryptDevice for CryptDeviceHandle<Luks1Params> {
-    fn activate(&mut self, name: &str, key: &[u8]) -> Result<Keyslot> {
-        crate::device::luks_activate(&mut self.cd, name, key)
-    }
-
-    fn deactivate(self, name: &str) -> Result<()> {
-        crate::device::deactivate(self.cd, name)
-    }
-
-    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()> {
-        crate::device::luks_destroy_keyslot(&mut self.cd, slot)
-    }
-
-    fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info {
-        crate::device::keyslot_status(&self.cd, keyslot)
-    }
-
-    fn dump(&self) {
-        crate::device::dump(&self.cd).expect("Dump should be fine for initialised device")
-    }
-
-    fn uuid(&self) -> Uuid {
-        crate::device::uuid(&self.cd).expect("Initialised device should have UUID")
-    }
-}
-
-impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
-    fn add_keyslot(
-        &mut self,
-        key: &[u8],
-        maybe_prev_key: Option<&[u8]>,
-        maybe_keyslot: Option<Keyslot>,
-    ) -> Result<Keyslot> {
-        crate::device::luks_add_keyslot(&mut self.cd, key, maybe_prev_key, maybe_keyslot)
-    }
-
-    fn update_keyslot(&mut self, key: &[u8], prev_key: &[u8], maybe_keyslot: Option<Keyslot>) -> Result<Keyslot> {
-        crate::device::luks_update_keyslot(&mut self.cd, key, prev_key, maybe_keyslot)
-    }
-
-    fn hash_spec(&self) -> &str {
-        self.params.hash_spec.as_ref()
-    }
-
-    fn mk_bits(&self) -> u32 {
-        self.params.mk_bits
-    }
-
-    fn mk_digest(&self) -> &[u8; 20] {
-        &self.params.mk_digest
-    }
-
-    fn mk_iterations(&self) -> u32 {
-        self.params.mk_iterations
-    }
-
-    fn mk_salt(&self) -> &[u8; 32] {
-        &self.params.mk_salt
-    }
-
-    fn payload_offset(&self) -> u32 {
-        self.params.payload_offset
-    }
-}
-
-impl CryptDeviceType for CryptDeviceHandle<Luks1Params> {
-    fn device_type(&self) -> raw::crypt_device_type {
-        raw::crypt_device_type::LUKS1
-    }
-}
-
-/// Struct for storing LUKS2 parameters in memory
-#[derive(Debug, PartialEq)]
-pub struct Luks2Params {
-    label: Option<String>,
-    subsystem: Option<String>,
-    seqid: u64,
-    header_size: u64,
-    header_offset: u64,
-    // TODO do we need to expose others?
-}
-
-impl Luks2Params {
-    fn from(header: impl Luks2Header) -> Result<Luks2Params> {
-        let label = header.label()?.map(|s| s.to_owned());
-        let subsystem = header.subsystem()?.map(|s| s.to_owned());
-        let seqid = header.seqid();
-        let header_size = header.header_size();
-        let header_offset = header.header_offset();
-        Ok(Luks2Params {
-            label,
-            subsystem,
-            seqid,
-            header_size,
-            header_offset,
-        })
-    }
-}
-
-impl LuksCryptDevice for CryptDeviceHandle<Luks2Params> {
-    fn activate(&mut self, name: &str, key: &[u8]) -> Result<u8> {
-        crate::device::luks_activate(&mut self.cd, name, key)
-    }
-
-    fn deactivate(self, name: &str) -> Result<()> {
-        crate::device::deactivate(self.cd, name)
-    }
-
-    fn destroy_keyslot(&mut self, slot: Keyslot) -> Result<()> {
-        crate::device::luks_destroy_keyslot(&mut self.cd, slot)
-    }
-
-    fn keyslot_status(&self, keyslot: Keyslot) -> raw::crypt_keyslot_info {
-        crate::device::keyslot_status(&self.cd, keyslot)
-    }
-
-    fn dump(&self) {
-        crate::device::dump(&self.cd).expect("Dump should be fine for initialised device")
-    }
-
-    fn uuid(&self) -> Uuid {
-        crate::device::uuid(&self.cd).expect("Initialised device should have UUID")
-    }
-}
-
-impl Luks2CryptDevice for CryptDeviceHandle<Luks2Params> {}
-
-impl CryptDeviceType for CryptDeviceHandle<Luks2Params> {
-    fn device_type(&self) -> raw::crypt_device_type {
-        raw::crypt_device_type::LUKS2
     }
 }

@@ -813,7 +813,7 @@ impl FromStr for crypt_device_type {
 }
 
 impl crypt_device_type {
-    pub fn to_str(&self) -> &str {
+    pub fn to_str(&self) -> &'static str {
         match self {
             &crypt_device_type::PLAIN => "PLAIN",
             &crypt_device_type::LUKS1 => "LUKS1",
@@ -841,7 +841,7 @@ impl FromStr for crypt_pbkdf_algo_type {
 }
 
 impl crypt_pbkdf_algo_type {
-    pub fn to_str(&self) -> &str {
+    pub fn to_str(&self) -> &'static str {
         match self {
             &crypt_pbkdf_algo_type::pbkdf2 => "pbkdf2",
             &crypt_pbkdf_algo_type::argon2i => "argon2i",
@@ -865,7 +865,7 @@ impl FromStr for reencrypt_resilience_mode {
 }
 
 impl reencrypt_resilience_mode {
-    pub fn to_str(&self) -> &str {
+    pub fn to_str(&self) -> &'static str {
         match self {
             &reencrypt_resilience_mode::none => "none",
             &reencrypt_resilience_mode::checksum => "checksum",

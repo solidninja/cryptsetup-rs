@@ -2,21 +2,28 @@
 //!
 //! Consider using the high-level binding in the `api` module instead
 
+use std::error;
 use std::ffi;
+use std::fmt::Display;
 use std::mem;
 use std::path::Path;
 use std::ptr;
 use std::result;
 use std::str;
+use std::sync::Once;
 
-use blkid_rs;
 use errno;
 use libc;
-use raw;
+use serde::export::Formatter;
 use uuid::Uuid;
+
+use blkid_rs;
+use raw;
 
 /// Raw pointer to the underlying `crypt_device` opaque struct
 pub type RawDevice = *mut raw::crypt_device;
+
+static INIT_LOGGING: Once = Once::new();
 
 #[derive(Debug)]
 pub enum Error {
@@ -28,6 +35,27 @@ pub enum Error {
     BlkidError(blkid_rs::Error),
     /// The operation tried was not valid for the LUKS version
     InvalidLuksVersion,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::CryptsetupError(e) => write!(f, "Cryptsetup error: {}", e),
+            Error::IOError(io) => write!(f, "Underlying IO error: {}", io),
+            Error::BlkidError(e) => write!(f, "Blkid error: {}", e),
+            Error::InvalidLuksVersion => write!(f, "Invalid or unexpected LUKS version"),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self {
+            &Error::IOError(e) => Some(e),
+            &Error::BlkidError(e) => Some(e),
+            _ => None,
+        }
+    }
 }
 
 impl From<::std::io::Error> for Error {
@@ -81,16 +109,23 @@ pub extern "C" fn cryptsetup_rs_log_callback(
 ) {
     let msg = str_from_c_str(message).unwrap();
     match level {
-        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!("{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_ERROR => error!("{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!("{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!("{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG_JSON => debug!("{}", msg.trim_end()), // TODO - really?
+        raw::crypt_log_level::CRYPT_LOG_NORMAL => info!(target: "cryptsetup", "{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_ERROR => error!(target: "cryptsetup","{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!(target: "cryptsetup","{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!(target: "cryptsetup","{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG_JSON => debug!(target: "cryptsetup","{}", msg.trim_end()), // TODO - really?
     }
+}
+
+fn init_logging() {
+    INIT_LOGGING.call_once(|| unsafe {
+        raw::crypt_set_log_callback(ptr::null_mut(), Some(cryptsetup_rs_log_callback), ptr::null_mut());
+    });
 }
 
 /// Initialise crypt device and check if provided device exists
 pub fn init<P: AsRef<Path>>(path: P) -> Result<RawDevice> {
+    init_logging();
     let mut cd = ptr::null_mut();
     let c_path = ffi::CString::new(path.as_ref().to_str().unwrap()).unwrap();
 
@@ -99,9 +134,29 @@ pub fn init<P: AsRef<Path>>(path: P) -> Result<RawDevice> {
     if res != 0 {
         crypt_error!(res)
     } else {
-        unsafe {
-            raw::crypt_set_log_callback(cd, Some(cryptsetup_rs_log_callback), ptr::null_mut());
-        }
+        Ok(cd)
+    }
+}
+
+/// Initialise crypt device by header device and data device, and check if provided device exists
+pub fn init_detached_header<P1: AsRef<Path>, P2: AsRef<Path>>(header_path: P1, device_path: P2) -> Result<RawDevice> {
+    init_logging();
+    let mut cd = ptr::null_mut();
+
+    let c_header_path = ffi::CString::new(header_path.as_ref().to_str().unwrap()).unwrap();
+    let c_device_path = ffi::CString::new(device_path.as_ref().to_str().unwrap()).unwrap();
+
+    let res = unsafe {
+        raw::crypt_init_data_device(
+            &mut cd as *mut *mut raw::crypt_device,
+            c_header_path.as_ptr(),
+            c_device_path.as_ptr(),
+        )
+    };
+
+    if res != 0 {
+        crypt_error!(res)
+    } else {
         Ok(cd)
     }
 }
@@ -241,29 +296,20 @@ pub fn luks_destroy_keyslot(cd: &mut RawDevice, keyslot: Keyslot) -> Result<()> 
     }
 }
 
-/// Format a new crypt device but do not activate it
-///
-/// Note this does not add an active keyslot
-pub fn luks1_format(
+fn generic_format(
     cd: &mut RawDevice,
     cipher: &str,
     cipher_mode: &str,
-    hash: &str,
     mk_bits: usize,
     maybe_uuid: Option<&uuid::Uuid>,
+    type_: raw::crypt_device_type,
+    c_params: *mut libc::c_void,
 ) -> Result<()> {
     let c_cipher = ffi::CString::new(cipher).unwrap();
     let c_cipher_mode = ffi::CString::new(cipher_mode).unwrap();
-    let c_hash = ffi::CString::new(hash).unwrap();
     let c_uuid = maybe_uuid.map(|uuid| ffi::CString::new(uuid.to_hyphenated().to_string()).unwrap());
 
-    let mut luks_params = raw::crypt_params_luks1 {
-        hash: c_hash.as_ptr(),
-        data_alignment: 0,
-        data_device: ptr::null(),
-    };
-    let c_luks_params: *mut raw::crypt_params_luks1 = &mut luks_params;
-    let c_luks_type = ffi::CString::new(raw::crypt_device_type::LUKS1.to_str()).unwrap();
+    let c_luks_type = ffi::CString::new(type_.to_str()).unwrap();
     let c_uuid_ptr = c_uuid.as_ref().map(|u| u.as_ptr()).unwrap_or(ptr::null());
     let res = unsafe {
         raw::crypt_format(
@@ -274,11 +320,166 @@ pub fn luks1_format(
             c_uuid_ptr,
             ptr::null(),
             mk_bits / 8,
-            c_luks_params as *mut libc::c_void,
+            c_params,
         )
     };
 
     check_crypt_error!(res)
+}
+
+/// Format a new crypt device as LUKS1 but do not activate it
+///
+/// Note this does not add an active keyslot
+pub fn luks1_format(
+    cd: &mut RawDevice,
+    cipher: &str,
+    cipher_mode: &str,
+    hash: &str,
+    mk_bits: usize,
+    maybe_uuid: Option<&uuid::Uuid>,
+) -> Result<()> {
+    let c_hash = ffi::CString::new(hash).unwrap();
+    let mut luks_params = raw::crypt_params_luks1 {
+        hash: c_hash.as_ptr(),
+        data_alignment: 0,
+        data_device: ptr::null(),
+    };
+    let c_luks_params: *mut raw::crypt_params_luks1 = &mut luks_params;
+    generic_format(
+        cd,
+        cipher,
+        cipher_mode,
+        mk_bits,
+        maybe_uuid,
+        raw::crypt_device_type::LUKS1,
+        c_luks_params as *mut libc::c_void,
+    )
+}
+
+/// equivalent to `raw::crypt_pbkdf_type`
+pub struct Luks2FormatPbkdf<'a> {
+    pub type_: raw::crypt_pbkdf_algo_type,
+    pub hash: &'a str,
+    pub time_ms: u32,
+    pub iterations: u32,
+    pub max_memory_kb: u32,
+    pub parallel_threads: u32,
+    pub flags: u32,
+}
+
+/// equivalent to `raw::crypt_params_integrity` (with omitted params for constants)
+pub struct Luks2FormatIntegrity<'a> {
+    journal_size: u64,
+    journal_watermark: u64,
+    journal_commit_time: u64,
+    interleave_sectors: u32,
+    tag_size: u32,
+    sector_size: u32,
+    buffer_sectors: u32,
+    journal_integrity_algorithm: &'a str,
+    journal_encryption_algorithm: &'a str,
+}
+
+/// Format a new crypt device as LUKS2 but do not activate it
+///
+/// Note this does not add an active keyslot
+pub fn luks2_format<'a>(
+    cd: &mut RawDevice,
+    cipher: &str,
+    cipher_mode: &str,
+    mk_bits: usize,
+    data_alignment: usize,
+    sector_size: u32,
+    label: Option<&'a str>,
+    subsystem: Option<&'a str>,
+    data_device: Option<&Path>,
+    maybe_uuid: Option<&uuid::Uuid>,
+    pbkdf: Option<&'a Luks2FormatPbkdf>,
+    integrity: Option<&'a Luks2FormatIntegrity>,
+) -> Result<()> {
+    let maybe_pbkdf = pbkdf.map(|p| {
+        let c_type = ffi::CString::new(p.type_.to_str()).unwrap();
+        let c_hash = ffi::CString::new(p.hash).unwrap();
+
+        let res = raw::crypt_pbkdf_type {
+            type_: c_type.as_ptr(),
+            hash: c_hash.as_ptr(),
+            time_ms: p.time_ms,
+            iterations: p.iterations,
+            max_memory_kb: p.max_memory_kb,
+            parallel_threads: p.parallel_threads,
+            flags: p.flags,
+        };
+
+        (res, (c_type, c_hash))
+    });
+    let maybe_integrity = integrity.map(|i| {
+        let c_journal_integrity = ffi::CString::new(i.journal_integrity_algorithm).unwrap();
+        let c_journal_crypt = ffi::CString::new(i.journal_encryption_algorithm).unwrap();
+
+        let res = raw::crypt_params_integrity {
+            journal_size: i.journal_size,
+            journal_watermark: i.journal_watermark as libc::c_uint,
+            journal_commit_time: i.journal_commit_time as libc::c_uint,
+            interleave_sectors: i.interleave_sectors,
+            tag_size: i.tag_size,
+            sector_size: i.sector_size,
+            buffer_sectors: i.buffer_sectors,
+            integrity: ptr::null(), // always null
+            integrity_key_size: 0,  // always 0
+            journal_integrity: c_journal_integrity.as_ptr(),
+            journal_integrity_key: ptr::null(), // only for crypt_load
+            journal_integrity_key_size: 0,      // only for crypt_load
+            journal_crypt: c_journal_crypt.as_ptr(),
+            journal_crypt_key: ptr::null(), // only for crypt_load
+            journal_crypt_key_size: 0,      // only for crypt_load
+        };
+
+        (res, (c_journal_integrity, c_journal_crypt))
+    });
+
+    let maybe_data_device = data_device
+        .map(|p| p.to_str())
+        .flatten()
+        .map(|s| ffi::CString::new(s).unwrap());
+    let maybe_label = label.map(|l| ffi::CString::new(l).unwrap());
+    let maybe_subsystem = subsystem.map(|s| ffi::CString::new(s).unwrap());
+
+    let mut luks2_params = raw::crypt_params_luks2 {
+        pbkdf: maybe_pbkdf
+            .as_ref()
+            .map_or(ptr::null(), |(p, _)| p as *const raw::crypt_pbkdf_type),
+        integrity: maybe_integrity.as_ref().map_or(ptr::null(), |(_, (i, _))| i.as_ptr()),
+        integrity_params: maybe_integrity
+            .as_ref()
+            .map_or(ptr::null(), |(i, _)| i as *const raw::crypt_params_integrity),
+        data_alignment,
+        data_device: maybe_data_device.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
+        sector_size,
+        label: maybe_label.as_ref().map_or(ptr::null(), |l| l.as_ptr()),
+        subsystem: maybe_subsystem.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
+    };
+    let c_luks2_params: *mut raw::crypt_params_luks2 = &mut luks2_params;
+
+    let res = generic_format(
+        cd,
+        cipher,
+        cipher_mode,
+        mk_bits,
+        maybe_uuid,
+        raw::crypt_device_type::LUKS2,
+        c_luks2_params as *mut libc::c_void,
+    );
+
+    let _discard = (
+        maybe_pbkdf,
+        maybe_integrity,
+        maybe_data_device,
+        maybe_label,
+        maybe_subsystem,
+        luks2_params,
+    );
+    res
 }
 
 /// Get which RNG is used
@@ -290,9 +491,10 @@ pub fn rng_type(cd: &RawDevice) -> raw::crypt_rng_type {
 }
 
 /// Set the number of milliseconds for `PBKDF2` function iteration
+#[deprecated]
 pub fn set_iteration_time(cd: &mut RawDevice, iteration_time_ms: u64) {
     unsafe {
-        #[allow(deprecated)] // FIXME
+        #[allow(deprecated)]
         raw::crypt_set_iteration_time(*cd, iteration_time_ms);
     }
 }

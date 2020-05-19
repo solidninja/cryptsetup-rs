@@ -2,11 +2,10 @@
 
 extern crate cryptsetup_rs;
 extern crate env_logger;
+extern crate expectest;
 extern crate log;
 extern crate tempfile;
 extern crate uuid;
-
-extern crate expectest;
 
 use std::process::Command;
 
@@ -23,7 +22,7 @@ struct TestContext {
 
 impl TestContext {
     fn new(name: String) -> TestContext {
-        env_logger::init();
+        let _ = env_logger::builder().is_test(true).try_init();
         cryptsetup_rs::enable_debug(true);
         let dir = Builder::new().prefix(&name).tempdir().expect("Tempdir!");
         TestContext { name, dir }
@@ -69,4 +68,23 @@ fn test_create_new_luks1_cryptdevice_no_errors() {
     expect!(dev.volume_key_size()).to(be_equal_to(32));
 
     expect!(dev.add_keyslot(b"hello world", None, Some(3))).to(be_ok().value(3));
+}
+
+#[test]
+fn test_create_new_luks2_cryptdevice_no_errors() {
+    let ctx = TestContext::new("new_luks1_cryptdevice".to_string());
+
+    let dev = ctx
+        .new_crypt_device()
+        .luks2("aes", "xts-plain", 256, None, None, None)
+        .label("test")
+        .argon2i("sha256", 200, 1, 1024, 1)
+        .start()
+        .expect("LUKS2 format should succeed");
+
+    dev.dump();
+
+    expect!(dev.device_type()).to(be_equal_to(crypt_device_type::LUKS2));
+
+    // TODO: add more assertions
 }
