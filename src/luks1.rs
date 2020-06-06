@@ -73,9 +73,7 @@ impl LuksCryptDevice for CryptDeviceHandle<Luks1Params> {
     fn uuid(&self) -> Uuid {
         crate::device::uuid(&self.cd).expect("Initialised device should have UUID")
     }
-}
 
-impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     fn add_keyslot(
         &mut self,
         key: &[u8],
@@ -88,7 +86,9 @@ impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     fn update_keyslot(&mut self, key: &[u8], prev_key: &[u8], maybe_keyslot: Option<Keyslot>) -> Result<Keyslot> {
         crate::device::luks_update_keyslot(&mut self.cd, key, prev_key, maybe_keyslot)
     }
+}
 
+impl Luks1CryptDevice for CryptDeviceHandle<Luks1Params> {
     fn hash_spec(&self) -> &str {
         self.params.hash_spec.as_ref()
     }

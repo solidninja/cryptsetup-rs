@@ -1,9 +1,11 @@
 #![deny(warnings)]
+#![allow(unused)]
 
 extern crate cryptsetup_rs;
 extern crate env_logger;
 extern crate expectest;
 extern crate log;
+extern crate serde_json;
 extern crate tempfile;
 extern crate uuid;
 
@@ -13,7 +15,9 @@ use expectest::prelude::*;
 use tempfile::{Builder, TempDir};
 use uuid::Uuid;
 
+use cryptsetup_rs::device::{luks2_token_status, TokenHandlerResult};
 use cryptsetup_rs::*;
+use libcryptsetup_sys::crypt_device;
 
 struct TestContext {
     dir: TempDir,
@@ -85,6 +89,74 @@ fn test_create_new_luks2_cryptdevice_no_errors() {
     dev.dump();
 
     expect!(dev.device_type()).to(be_equal_to(crypt_device_type::LUKS2));
+
+    // TODO: add more assertions
+}
+
+enum CustomTokenHandler {}
+
+impl Luks2TokenHandler for CustomTokenHandler {
+    fn name() -> &'static str {
+        "my_custom"
+    }
+
+    fn open(cd: *mut crypt_device, _token_id: i32) -> (Vec<u8>, TokenHandlerResult) {
+        (vec![0xca, 0xfe, 0xba, 0xbe], TokenHandlerResult::Success)
+    }
+
+    fn free(buf: Vec<u8>) {
+        // noop
+    }
+
+    fn can_validate() -> bool {
+        false
+    }
+
+    fn is_valid(cd: *mut crypt_device, json: String) -> Option<TokenHandlerResult> {
+        None
+    }
+
+    fn dump(cd: *mut crypt_device, json: String) {
+        println!("noop: dump called");
+    }
+}
+
+impl Luks2TokenHandlerRaw for CustomTokenHandler {}
+
+#[test]
+fn test_create_new_luks2_cryptdevice_with_token() {
+    let ctx = TestContext::new("new_luks1_cryptdevice".to_string());
+    let handler = Luks2CryptDeviceHandle::register_new_token_handler::<CustomTokenHandler>().expect("handler register");
+
+    let mut dev = ctx
+        .new_crypt_device()
+        .luks2("aes", "xts-plain", 256, None, None, None)
+        .label("test")
+        .argon2i("sha256", 200, 1, 1024, 1)
+        .start()
+        .expect("LUKS2 format should succeed");
+
+    let keyslot: Keyslot = 1;
+    dev.add_keyslot(&[0xca, 0xfe, 0xba, 0xbe], None, Some(keyslot))
+        .expect("add to keyslot");
+
+    let token = Luks2Token {
+        type_: "my_custom".to_string(),
+        keyslots: vec![],
+        other: serde_json::Map::new(),
+    };
+
+    let token_id = dev.add_token(&token).expect("adding token");
+    dev.assign_token_to_keyslot(token_id, Some(keyslot));
+
+    let got_keyslot = dev.check_activation_with_token(token_id).expect("activate with token");
+
+    dev.dump();
+
+    expect!(dev.device_type()).to(be_equal_to(crypt_device_type::LUKS2));
+    expect!(got_keyslot).to(be_equal_to(keyslot));
+
+    let _deferred = (handler,);
 
     // TODO: add more assertions
 }

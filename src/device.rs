@@ -2,9 +2,11 @@
 //!
 //! Consider using the high-level binding in the `api` module instead
 
+use std::boxed::Box;
 use std::error;
 use std::ffi;
 use std::fmt::Display;
+use std::marker::PhantomData;
 use std::mem;
 use std::path::Path;
 use std::ptr;
@@ -22,10 +24,12 @@ use raw;
 
 /// Raw pointer to the underlying `crypt_device` opaque struct
 pub type RawDevice = *mut raw::crypt_device;
+pub type Luks2TokenId = i32;
 
 static INIT_LOGGING: Once = Once::new();
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Error that originates from `libcryptsetup` (with numeric error code)
     CryptsetupError(errno::Errno),
@@ -35,6 +39,8 @@ pub enum Error {
     BlkidError(blkid_rs::Error),
     /// The operation tried was not valid for the LUKS version
     InvalidLuksVersion,
+    /// Invalid JSON (with message)
+    InvalidJson(String),
 }
 
 impl Display for Error {
@@ -44,6 +50,7 @@ impl Display for Error {
             Error::IOError(io) => write!(f, "Underlying IO error: {}", io),
             Error::BlkidError(e) => write!(f, "Blkid error: {}", e),
             Error::InvalidLuksVersion => write!(f, "Invalid or unexpected LUKS version"),
+            Error::InvalidJson(msg) => write!(f, "Invalid JSON encountered: {}", msg),
         }
     }
 }
@@ -110,10 +117,10 @@ pub extern "C" fn cryptsetup_rs_log_callback(
     let msg = str_from_c_str(message).unwrap();
     match level {
         raw::crypt_log_level::CRYPT_LOG_NORMAL => info!(target: "cryptsetup", "{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_ERROR => error!(target: "cryptsetup","{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!(target: "cryptsetup","{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!(target: "cryptsetup","{}", msg.trim_end()),
-        raw::crypt_log_level::CRYPT_LOG_DEBUG_JSON => debug!(target: "cryptsetup","{}", msg.trim_end()), // TODO - really?
+        raw::crypt_log_level::CRYPT_LOG_ERROR => error!(target: "cryptsetup", "{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_VERBOSE => debug!(target: "cryptsetup", "{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG => debug!(target: "cryptsetup", "{}", msg.trim_end()),
+        raw::crypt_log_level::CRYPT_LOG_DEBUG_JSON => debug!(target: "cryptsetup", "{}", msg.trim_end()), // TODO - really?
     }
 }
 
@@ -480,6 +487,255 @@ pub fn luks2_format<'a>(
         luks2_params,
     );
     res
+}
+
+#[repr(i32)]
+pub enum TokenHandlerResult {
+    Success = 0,
+    Failure = 1,
+}
+
+/// In-memory representation of handler (needed because cryptsetup doesn't copy the handler struct)
+pub struct Luks2TokenHandlerBox<H>
+where
+    H: Luks2TokenHandler + Luks2TokenHandlerRaw,
+{
+    _c_name: ffi::CString,
+    c_handler: Box<raw::crypt_token_handler>,
+    _handler: PhantomData<H>,
+}
+
+impl<H: Luks2TokenHandler + Luks2TokenHandlerRaw> Luks2TokenHandlerBox<H> {
+    pub fn new() -> Luks2TokenHandlerBox<H> {
+        let c_name = ffi::CString::new(H::name()).expect("valid name");
+        let c_handler = Box::new(raw::crypt_token_handler {
+            name: c_name.as_ptr(),
+            open: H::raw_open_func,
+            buffer_free: Some(H::raw_free_func),
+            validate: Some(H::raw_validate_func),
+            dump: Some(H::raw_dump_func),
+        });
+        Luks2TokenHandlerBox {
+            _c_name: c_name,
+            c_handler,
+            _handler: PhantomData,
+        }
+    }
+}
+
+/// Equivalence trait for `raw::crypt_token_handler`
+///
+/// The implementation makes use of traits to generate the raw C functions as a default trait implementation in
+/// `Luks2TokenHandlerRaw`. There isn't really an alternative (safe) way to create the C functions because the
+/// libcryptsetup interface does not offer user pointers as parameters on all of the callback functions (eliminating
+/// the possibility of using boxed closures)
+pub trait Luks2TokenHandler {
+    /// Display name of token handler
+    fn name() -> &'static str;
+
+    /// Return the key (the vector returned will be disowned and passed to the free function later)
+    fn open(cd: RawDevice, token_id: Luks2TokenId) -> (Vec<u8>, TokenHandlerResult);
+
+    /// Free the key (by passing it the reconstructed) vector
+    fn free(buf: Vec<u8>);
+
+    /// Whether the handler can validate json
+    fn can_validate() -> bool;
+
+    /// Validate the token handler JSON representation
+    fn is_valid(cd: RawDevice, json: String) -> Option<TokenHandlerResult>;
+
+    /// Dump debug information about the token handler implementation
+    fn dump(cd: RawDevice, json: String);
+}
+
+/// Companion trait to `Luks2TokenHandler` which contains the raw FFI implementation. Users should implement this trait
+/// but not override the implementation.
+pub trait Luks2TokenHandlerRaw: Luks2TokenHandler {
+    extern "C" fn raw_open_func(
+        cd: *mut raw::crypt_device,
+        token: libc::c_int,
+        buffer: *mut *mut libc::c_char,
+        buffer_len: *mut libc::size_t,
+        _usrptr: *mut libc::c_void,
+    ) -> libc::c_int {
+        let (mut buf, res) = Self::open(cd, token as Luks2TokenId);
+
+        // capacity shrinking is approximate, but we only have a single pointer :/
+        buf.shrink_to_fit();
+        assert!(buf.capacity() == buf.len());
+
+        let buf_ptr = buf.as_mut_ptr();
+        let len = buf.len();
+        mem::forget(buf);
+
+        unsafe {
+            *buffer = buf_ptr as *mut libc::c_char;
+            *buffer_len = len as libc::size_t;
+        }
+
+        res as i32 as libc::c_int
+    }
+
+    extern "C" fn raw_free_func(buffer: *mut libc::c_void, buffer_len: libc::size_t) {
+        let buf = unsafe { Vec::from_raw_parts(buffer as *mut libc::c_char as *mut u8, buffer_len, buffer_len) };
+        Self::free(buf)
+    }
+
+    extern "C" fn raw_dump_func(cd: *mut raw::crypt_device, token_json: *const libc::c_char) {
+        let json = str_from_c_str(token_json).map_or_else(|| String::new(), |s| s.to_string());
+        Self::dump(cd, json)
+    }
+
+    extern "C" fn raw_validate_func(cd: *mut raw::crypt_device, token_json: *const libc::c_char) -> libc::c_int {
+        let res = if Self::can_validate() {
+            let json = str_from_c_str(token_json).map_or_else(|| String::new(), |s| s.to_string());
+            Self::is_valid(cd, json).expect("validation result")
+        } else {
+            TokenHandlerResult::Success
+        };
+
+        res as i32 as libc::c_int
+    }
+}
+
+/// Register a LUKS2 token handler
+///
+/// Note: the implementation relies on a struct with a box containing the actual handler C struct. The handler C struct
+///     must not be deallocated while the handler is registered.
+pub fn luks2_register_token_handler<H: Luks2TokenHandlerRaw>(handler_box: &Luks2TokenHandlerBox<H>) -> Result<()> {
+    let res = unsafe { raw::crypt_token_register(handler_box.c_handler.as_ref()) };
+    check_crypt_error!(res)
+}
+
+/// Get the status of LUKS2 token id (and if successful, the type name of the token)
+pub fn luks2_token_status(cd: &mut RawDevice, token_id: Luks2TokenId) -> (raw::crypt_token_info, Option<String>) {
+    let mut type_ptr: *const libc::c_char = ptr::null();
+    let res =
+        unsafe { raw::crypt_token_status(*cd, token_id as libc::c_int, &mut type_ptr as *mut *const libc::c_char) };
+
+    let token_type = if !type_ptr.is_null() {
+        str_from_c_str(type_ptr).map(|s| s.to_string())
+    } else {
+        None
+    };
+
+    (res, token_type)
+}
+
+/// Get the token's JSON value for a token id
+pub fn luks2_token_json(cd: &mut RawDevice, token_id: Luks2TokenId) -> Result<String> {
+    let mut json_ptr: *const libc::c_char = ptr::null();
+    let res =
+        unsafe { raw::crypt_token_json_get(*cd, token_id as libc::c_int, &mut json_ptr as *mut *const libc::c_char) };
+
+    if res < 0 {
+        crypt_error!(res)
+    } else {
+        let json = str_from_c_str(json_ptr)
+            .map(|s| s.to_string())
+            .expect("valid json string");
+        Ok(json)
+    }
+}
+
+/// Set the token's JSON value and allocate it to a token id (new token id will be allocated if no token id is passed)
+///
+/// Note: the JSON string passed in must have a "type" field with the token handler type and a list of "keyslots"
+pub fn luks2_token_json_allocate(
+    cd: &mut RawDevice,
+    json: &str,
+    token_id: Option<Luks2TokenId>,
+) -> Result<Luks2TokenId> {
+    let c_json = ffi::CString::new(json).unwrap();
+
+    println!("BEFORE JSON ALLOCATE: {}", json);
+
+    let res = unsafe { raw::crypt_token_json_set(*cd, token_id.unwrap_or(raw::CRYPT_ANY_TOKEN), c_json.as_ptr()) };
+    let _deferred = (c_json,);
+
+    if res < 0 {
+        crypt_error!(res)
+    } else {
+        Ok(res as Luks2TokenId)
+    }
+}
+
+/// Removes a token by its id
+pub fn luks2_token_remove(cd: &mut RawDevice, token_id: Luks2TokenId) -> Result<()> {
+    let res = unsafe { raw::crypt_token_json_set(*cd, token_id, ptr::null()) };
+
+    check_crypt_error!(res)
+}
+
+/// Assigns a token id to a keyslot (or, if no keyslot is specified, all active keyslots)
+pub fn luks2_token_assign_keyslot(cd: &mut RawDevice, token_id: Luks2TokenId, keyslot: Option<Keyslot>) -> Result<()> {
+    let res = unsafe {
+        raw::crypt_token_assign_keyslot(
+            *cd,
+            token_id,
+            keyslot.map_or(raw::CRYPT_ANY_SLOT, |ks| ks as libc::c_int),
+        )
+    };
+
+    check_crypt_error!(res)
+}
+
+/// Unassigns a token id from a keyslot (or, if no keyslot is specified, all active keyslots)
+pub fn luks2_token_unassign_keyslot(
+    cd: &mut RawDevice,
+    token_id: Luks2TokenId,
+    keyslot: Option<Keyslot>,
+) -> Result<()> {
+    let res = unsafe {
+        raw::crypt_token_unassign_keyslot(
+            *cd,
+            token_id,
+            keyslot.map_or(raw::CRYPT_ANY_SLOT, |ks| ks as libc::c_int),
+        )
+    };
+
+    check_crypt_error!(res)
+}
+
+/// Get information about token assignment for a particular keyslot
+pub fn luks2_token_is_assigned(cd: &mut RawDevice, token_id: Luks2TokenId, keyslot: Keyslot) -> Result<bool> {
+    let res = unsafe { raw::crypt_token_is_assigned(*cd, token_id, keyslot as libc::c_int) };
+
+    if res == 0 {
+        Ok(true)
+    } else if res == libc::ENOENT {
+        Ok(false)
+    } else {
+        crypt_error!(res)
+    }
+}
+
+/// Activate device, or when name is not provided, check the key can open the device
+pub fn luks2_activate_by_token(
+    cd: &mut RawDevice,
+    name: Option<&str>,
+    token_id: Option<Luks2TokenId>,
+) -> Result<Keyslot> {
+    let c_name_opt = name.and_then(|n| ffi::CString::new(n).ok());
+
+    let res = unsafe {
+        raw::crypt_activate_by_token(
+            *cd,
+            c_name_opt.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
+            token_id.unwrap_or(raw::CRYPT_ANY_TOKEN),
+            ptr::null_mut(),
+            0,
+        )
+    };
+
+    let _deferred = (c_name_opt,);
+
+    if res < 0 {
+        crypt_error!(res)
+    } else {
+        Ok(res as Keyslot)
+    }
 }
 
 /// Get which RNG is used

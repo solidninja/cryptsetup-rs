@@ -12,14 +12,16 @@ use uuid;
 
 use blkid_rs::{LuksHeader, LuksVersionedHeader};
 use raw;
-pub use raw::crypt_pbkdf_algo_type;
+pub use raw::{crypt_pbkdf_algo_type, crypt_token_info};
 
-pub use crate::device::{Error, Keyslot, Result};
+pub use crate::device::{
+    Error, Keyslot, Luks2TokenHandler, Luks2TokenHandlerBox, Luks2TokenHandlerRaw, Luks2TokenId, Result,
+};
 use crate::device::{Luks2FormatPbkdf, RawDevice};
 pub use crate::global::enable_debug;
 use crate::luks1::Luks1Params;
 use crate::luks2::Luks2Params;
-pub use crate::luks2_meta::Luks2Metadata;
+pub use crate::luks2_meta::{Luks2Metadata, Luks2Token};
 
 pub type Luks1CryptDeviceHandle = CryptDeviceHandle<Luks1Params>;
 pub type Luks2CryptDeviceHandle = CryptDeviceHandle<Luks2Params>;
@@ -386,10 +388,7 @@ pub trait LuksCryptDevice: CryptDevice + CryptDeviceType {
 
     /// UUID of the current device
     fn uuid(&self) -> uuid::Uuid;
-}
 
-/// Trait representing specific operations on a LUKS1 device
-pub trait Luks1CryptDevice: LuksCryptDevice {
     /// Add a new keyslot with the specified key
     fn add_keyslot(
         &mut self,
@@ -400,7 +399,10 @@ pub trait Luks1CryptDevice: LuksCryptDevice {
 
     /// Replace an old key with a new one
     fn update_keyslot(&mut self, key: &[u8], prev_key: &[u8], maybe_keyslot: Option<Keyslot>) -> Result<Keyslot>;
+}
 
+/// Trait representing specific operations on a LUKS1 device
+pub trait Luks1CryptDevice: LuksCryptDevice {
     /// Get the hash algorithm used
     fn hash_spec(&self) -> &str;
 
@@ -421,7 +423,43 @@ pub trait Luks1CryptDevice: LuksCryptDevice {
 }
 
 /// Trait representing specific operations on a LUKS2 device
-pub trait Luks2CryptDevice: LuksCryptDevice {}
+pub trait Luks2CryptDevice: LuksCryptDevice {
+    /// Register a LUKS2 token handler
+    fn register_new_token_handler<Handler: Luks2TokenHandlerRaw>() -> Result<Luks2TokenHandlerBox<Handler>>;
+
+    /// Register a LUKS2 token handler given a reference to it
+    fn register_token_handler<Handler: Luks2TokenHandlerRaw>(handler: &Luks2TokenHandlerBox<Handler>) -> Result<()>;
+
+    /// Get token status for a given token id
+    fn token_status(&mut self, token_id: Luks2TokenId) -> (crypt_token_info, Option<String>);
+
+    /// Get a token by id
+    fn get_token(&mut self, token_id: Luks2TokenId) -> Result<Luks2Token>;
+
+    /// Add a token with a specific id
+    fn add_token_with_id(&mut self, token: &Luks2Token, token_id: Luks2TokenId) -> Result<()>;
+
+    /// Add a token, returning the allocated token id
+    fn add_token(&mut self, token: &Luks2Token) -> Result<Luks2TokenId>;
+
+    /// Remove a token by id
+    fn remove_token(&mut self, token_id: Luks2TokenId) -> Result<()>;
+
+    /// Assign a token id to a keyslot (or all active keyslots if no keyslot is specified)
+    fn assign_token_to_keyslot(&mut self, token_id: Luks2TokenId, keyslot_opt: Option<Keyslot>) -> Result<()>;
+
+    /// Unassing a token from a keyslot (or all active keyslots if no keyslot is specified)
+    fn unassign_token_keyslot(&mut self, token_id: Luks2TokenId, keyslot_opt: Option<Keyslot>) -> Result<()>;
+
+    /// Check whether a token is assigned to a given keyslot
+    fn token_keyslot_is_assigned(&mut self, token_id: Luks2TokenId, keyslot: Keyslot) -> Result<bool>;
+
+    /// Activate the crypt device with the specified name and token
+    fn activate_with_token(&mut self, name: &str, token_id: Luks2TokenId) -> Result<Keyslot>;
+
+    /// Check activation of a device with a token
+    fn check_activation_with_token(&mut self, token_id: Luks2TokenId) -> Result<Keyslot>;
+}
 
 /// An opaque handle on an initialized crypt device
 #[derive(PartialEq)]

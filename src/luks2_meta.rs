@@ -176,6 +176,24 @@ pub struct Luks2Token {
     pub other: serde_json::Map<String, serde_json::Value>,
 }
 
+impl TryFrom<&str> for Luks2Token {
+    type Error = Box<dyn error::Error>;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let res = serde_json::from_str(value)?;
+        Ok(res)
+    }
+}
+
+impl TryFrom<&Luks2Token> for String {
+    type Error = Box<dyn error::Error>;
+
+    fn try_from(value: &Luks2Token) -> Result<Self, Self::Error> {
+        let res = serde_json::to_string(value)?;
+        Ok(res)
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct Luks2Metadata {
     pub config: Luks2Config,
