@@ -6,11 +6,11 @@
 
 A safe binding to `libcryptsetup` that allows working with encrypted disks on Linux.
 
-Requires `libcryptetup >= 2.0.0` to compile.
+Requires `libcryptetup >= 2.1.0` to compile.
 
 Features:
-  * High-level API for open/format/other operations
-
+  * High-level API for LUKS open/format/other operations
+  * LUKS2 support including tokens handlers
 
 Documentation for the bindings can be found on [docs.rs](https://docs.rs/crate/cryptsetup-rs/).
 
@@ -19,9 +19,13 @@ be implemented.
 
 ## TODO
 
-* Secure string for passing keys
-* High-level API for non-LUKS1 disks (truecrypt, verity)
-* LUKS2 and cryptsetup2 support
+* High-level API for non-LUKS1 disks (truecrypt, verity, bitlocker)
+* LUKS2 reencryption support
+
+### Other libraries
+
+The [libcryptsetup-rs](https://crates.io/crates/libcryptsetup-rs) library provides a more complete set of bindings with
+a different (non-builder like) API.
 
 ## Contributing
 

@@ -363,6 +363,7 @@ pub enum crypt_reencrypt_mode_info {
     CRYPT_REENCRYPT_DECRYPT,
 }
 
+#[cfg(cryptsetup2_2)]
 #[repr(C)]
 pub struct crypt_params_reencrypt {
     pub mode: crypt_reencrypt_mode_info,
@@ -439,7 +440,10 @@ extern "C" {
         params: *mut c_void,
     ) -> c_int;
 
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_set_compatibility(cd: *mut crypt_device, flags: u32);
+
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_get_compatibility(cd: *mut crypt_device) -> u32;
 
     pub fn crypt_convert(cd: *mut crypt_device, type_: *const c_char, params: *mut c_void) -> c_int;
@@ -487,6 +491,8 @@ extern "C" {
         keyfile: *const c_char,
         keyfile_size: size_t,
     ) -> c_int;
+
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_resume_by_volume_key(
         cd: *mut crypt_device,
         name: *const c_char,
@@ -607,6 +613,8 @@ extern "C" {
         volume_key_size: size_t,
         flags: u32,
     ) -> c_int;
+
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_activate_by_signed_key(
         cd: *mut crypt_device,
         name: *const c_char,
@@ -764,6 +772,7 @@ extern "C" {
         flags: u32,
     ) -> c_int;
 
+    #[cfg(cryptsetup2_2)]
     pub fn crypt_reencrypt_init_by_passphrase(
         cd: *mut crypt_device,
         name: *const c_char,
@@ -775,6 +784,8 @@ extern "C" {
         cipher_mode: *const c_char,
         params: *const crypt_params_reencrypt,
     ) -> c_int;
+
+    #[cfg(cryptsetup2_2)]
     pub fn crypt_reencrypt_init_by_keyring(
         cd: *mut crypt_device,
         name: *const c_char,
@@ -785,12 +796,23 @@ extern "C" {
         cipher_mode: *const c_char,
         params: *const crypt_params_reencrypt,
     ) -> c_int;
+
+    #[cfg(cryptsetup2_2)]
     pub fn crypt_reencrypt(cd: *mut crypt_device, progress: crypt_write_op_cb) -> c_int;
+
+    #[cfg(cryptsetup2_2)]
     pub fn crypt_reencrypt_status(cd: *mut crypt_device, params: *mut crypt_params_reencrypt) -> crypt_reencrypt_info;
 
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_safe_alloc(size: size_t) -> *mut c_void;
+
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_safe_free(data: *mut c_void);
+
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_safe_realloc(data: *mut c_void, size: size_t) -> *mut c_void;
+
+    #[cfg(cryptsetup2_3)]
     pub fn crypt_safe_memzero(data: *mut c_void, size: size_t);
 }
 
