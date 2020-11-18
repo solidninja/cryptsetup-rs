@@ -5,45 +5,43 @@ homepage = "https://gitlab.com/solidninja/cryptsetup-rs"
 repository = "https://gitlab.com/solidninja/cryptsetup-rs"
 license = "LGPL-3.0"
 name = "cryptsetup-rs"
-version = "0.3.0-beta1"
+version = "0.3.0-beta2"
 edition = "2018"
 
 [badges]
 gitlab = { repository = "solidninja/cryptsetup-rs" }
 
 [dependencies]
-base64 = "0.12"
-base64-serde = "0.5"
-either = "1.5"
-errno = "0.2"
-libc = "0.2"
-log = "0.4"
-serde_json = "1.0"
-serde_repr = "0.1"
+base64 = "0.13.0"
+base64-serde = "0.6.1"
+either = "1.6.1"
+errno = "0.2.7"
+libc = "0.2.80"
+log = "0.4.11"
+serde_json = "1.0.59"
+serde_repr = "0.1.6"
+serde_with = "1.5.1"
 
 [dependencies.blkid-rs]
 path = "blkid-rs"
-version = "0.3.0-beta1"
+version = "0.3.0-beta2"
 
 [dependencies.libcryptsetup-sys]
 path = "libcryptsetup-sys"
-version = "0.3.0-beta1"
+version = "0.3.0-beta2"
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0"
-
-[dependencies.serde_with]
-version = "1.4"
+version = "1.0.117"
 
 [dependencies.uuid]
 features = ["v4"]
-version = "0.8"
+version = "0.8.1"
 
 [dev-dependencies]
-env_logger = "0.7"
-expectest = "0.12"
-tempfile = "3.1"
+env_logger = "0.8.1"
+expectest = "0.12.0"
+tempfile = "3.1.0"
 
 [lib]
 name = "cryptsetup_rs"
