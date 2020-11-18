@@ -459,6 +459,17 @@ pub trait Luks2CryptDevice: LuksCryptDevice {
 
     /// Check activation of a device with a token
     fn check_activation_with_token(&mut self, token_id: Luks2TokenId) -> Result<Keyslot>;
+
+    /// Set PBKDF parameters (used during next keyslot registration)
+    fn set_pbkdf_params(
+        &mut self,
+        type_: crypt_pbkdf_algo_type,
+        hash: &str,
+        time_ms: u32,
+        iterations: u32,
+        max_memory_kb: u32,
+        parallel_threads: u32,
+    ) -> Result<()>;
 }
 
 /// An opaque handle on an initialized crypt device

@@ -6,9 +6,11 @@ use uuid::Uuid;
 
 use blkid_rs::{Luks2Header, LuksHeader};
 
-use crate::api::{crypt_token_info, CryptDeviceHandle};
+use crate::api::{crypt_pbkdf_algo_type, crypt_token_info, CryptDeviceHandle};
 use crate::api::{CryptDeviceType, Luks2CryptDevice, LuksCryptDevice};
-use crate::device::{Error, Keyslot, Luks2TokenHandlerBox, Luks2TokenHandlerRaw, Luks2TokenId, Result};
+use crate::device::{
+    Error, Keyslot, Luks2FormatPbkdf, Luks2TokenHandlerBox, Luks2TokenHandlerRaw, Luks2TokenId, Result,
+};
 use crate::luks2_meta::Luks2Token;
 
 /// Struct for storing LUKS2 parameters in memory
@@ -140,6 +142,27 @@ impl Luks2CryptDevice for CryptDeviceHandle<Luks2Params> {
 
     fn check_activation_with_token(&mut self, token_id: Luks2TokenId) -> Result<Keyslot> {
         crate::device::luks2_activate_by_token(&mut self.cd, None, Some(token_id))
+    }
+
+    fn set_pbkdf_params(
+        &mut self,
+        type_: crypt_pbkdf_algo_type,
+        hash: &str,
+        time_ms: u32,
+        iterations: u32,
+        max_memory_kb: u32,
+        parallel_threads: u32,
+    ) -> Result<()> {
+        let params = Luks2FormatPbkdf {
+            type_,
+            hash,
+            time_ms,
+            iterations,
+            max_memory_kb,
+            parallel_threads,
+            flags: 0,
+        };
+        crate::device::luks2_set_pbkdf_type(&mut self.cd, &params)
     }
 }
 

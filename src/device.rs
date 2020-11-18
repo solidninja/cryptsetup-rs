@@ -738,6 +738,27 @@ pub fn luks2_activate_by_token(
     }
 }
 
+pub fn luks2_set_pbkdf_type(cd: &mut RawDevice, pbkdf: &Luks2FormatPbkdf) -> Result<()> {
+    let c_type = ffi::CString::new(pbkdf.type_.to_str()).unwrap();
+    let c_hash = ffi::CString::new(pbkdf.hash).unwrap();
+
+    let c_pbkdf_type = raw::crypt_pbkdf_type {
+        type_: c_type.as_ptr(),
+        hash: c_hash.as_ptr(),
+        time_ms: pbkdf.time_ms,
+        iterations: pbkdf.iterations,
+        max_memory_kb: pbkdf.max_memory_kb,
+        parallel_threads: pbkdf.parallel_threads,
+        flags: pbkdf.flags,
+    };
+
+    let res = unsafe { raw::crypt_set_pbkdf_type(*cd, &c_pbkdf_type as *const raw::crypt_pbkdf_type) };
+
+    let _discard = (c_type, c_hash, c_pbkdf_type);
+
+    check_crypt_error!(res)
+}
+
 /// Get which RNG is used
 pub fn rng_type(cd: &RawDevice) -> raw::crypt_rng_type {
     unsafe {
