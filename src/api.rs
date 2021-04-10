@@ -12,7 +12,7 @@ use uuid;
 
 use blkid_rs::{LuksHeader, LuksVersionedHeader};
 use raw;
-pub use raw::{crypt_pbkdf_algo_type, crypt_token_info};
+pub use raw::{crypt_pbkdf_algo_type, crypt_status_info, crypt_token_info};
 
 pub use crate::device::{
     Error, Keyslot, Luks2TokenHandler, Luks2TokenHandlerBox, Luks2TokenHandlerRaw, Luks2TokenId, Result,
@@ -43,6 +43,11 @@ pub fn open<P: AsRef<Path>>(path: P) -> Result<CryptDeviceOpenBuilder> {
         path: path.as_ref().to_owned(),
         cd,
     })
+}
+
+/// Query the status of an active crypt device
+pub fn status(name: &str) -> crypt_status_info {
+    crate::device::status_only(name)
 }
 
 /// Builder to format a crypt device at the specified path
