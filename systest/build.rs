@@ -50,5 +50,5 @@ fn main() {
         .skip_fn(|f| SKIPPED_FUNCTIONS.contains(&f))
         .skip_roundtrip(|f| f.ends_with("_func")) // due to lack of MaybeUninit
     ;
-    cfg.generate("../libcryptsetup-sys/lib.rs", "all.rs");
+    cfg.generate("../lib/libcryptsetup-sys/lib.rs", "all.rs");
 }
