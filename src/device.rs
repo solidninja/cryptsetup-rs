@@ -18,6 +18,7 @@ use errno;
 use libc;
 use uuid::Uuid;
 
+use crate::api::crypt_status_info;
 use blkid_rs;
 use raw;
 
@@ -167,6 +168,21 @@ pub fn init_detached_header<P1: AsRef<Path>, P2: AsRef<Path>>(header_path: P1, d
     }
 }
 
+/// Initialise active crypt device by name (and error out if inactive)
+pub fn init_by_name(name: &str) -> Result<RawDevice> {
+    init_logging();
+    let mut cd = ptr::null_mut();
+    let c_name = ffi::CString::new(name).unwrap();
+
+    let res = unsafe { raw::crypt_init_by_name(&mut cd as *mut *mut raw::crypt_device, c_name.as_ptr()) };
+
+    if res != 0 {
+        crypt_error!(res)
+    } else {
+        Ok(cd)
+    }
+}
+
 /// Load crypt device parameters from the on-disk header
 ///
 /// Note that typically you cannot query the crypt device for information before this function is
@@ -213,6 +229,20 @@ pub fn dump(cd: &RawDevice) -> Result<()> {
 /// Releases crypt device context and memory
 pub fn free(cd: &mut RawDevice) {
     unsafe { raw::crypt_free(*cd) }
+}
+
+/// Get status info about a device name
+pub fn status(cd: &mut RawDevice, name: &str) -> crypt_status_info {
+    let c_name = ffi::CString::new(name).unwrap();
+
+    unsafe { raw::crypt_status(*cd, c_name.as_ptr()) }
+}
+
+/// Get status info about a device name (only)
+pub fn status_only(name: &str) -> crypt_status_info {
+    let c_name = ffi::CString::new(name).unwrap();
+
+    unsafe { raw::crypt_status(ptr::null_mut(), c_name.as_ptr()) }
 }
 
 /// Activate device based on provided key ("passphrase")
