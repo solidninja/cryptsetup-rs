@@ -27,7 +27,7 @@ path = "lib/blkid-rs"
 version = "0.3.0-beta3"
 
 [dependencies.libcryptsetup-sys]
-path = "libcryptsetup-sys"
+path = "lib/libcryptsetup-sys"
 version = "0.3.0-beta3"
 
 [dependencies.serde]
@@ -39,7 +39,7 @@ features = ["v4"]
 version = "1.1.2"
 
 [dev-dependencies]
-env_logger = "0.8.4"
+env_logger = "0.9.0"
 expectest = "0.12.0"
 tempfile = "3.3.0"
 
@@ -47,4 +47,8 @@ tempfile = "3.3.0"
 name = "cryptsetup_rs"
 
 [workspace]
-members = ["lib/blkid-rs", "libcryptsetup-sys", "systest"]
+members = [
+    "lib/blkid-rs",
+    "lib/libcryptsetup-sys",
+    "systest",
+]
