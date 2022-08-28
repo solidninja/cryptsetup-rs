@@ -45,7 +45,8 @@ mod luks2_meta;
 pub use api::{enable_debug, format, luks1_uuid, luks_uuid, luks_version, open};
 pub use api::{
     CryptDevice, CryptDeviceType, Error, Keyslot, Luks1CryptDevice, Luks1CryptDeviceHandle, Luks2CryptDevice,
-    Luks2CryptDeviceHandle, Luks2Metadata, Luks2TokenHandler, Luks2TokenHandlerRaw, LuksCryptDevice, Result,
+    Luks2CryptDeviceHandle, Luks2Metadata, Luks2TokenHandler, Luks2TokenHandlerRaw, Luks2TokenId, LuksCryptDevice,
+    Result,
 };
 pub use luks2_meta::*;
 pub use raw::{crypt_device_type, crypt_keyslot_info, crypt_rng_type};
