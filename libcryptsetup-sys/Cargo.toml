@@ -1,11 +1,11 @@
 [package]
 name = "libcryptsetup-sys"
-version = "0.3.0-beta2"
+version = "0.3.0-beta3"
 authors = ["Vladimir Lushnikov <vladimir@solidninja.is>"]
 license = "LGPL-3.0"
 description = "FFI bindings to the libcryptsetup library"
 homepage = "https://gitlab.com/solidninja/cryptsetup-rs"
-edition = "2018"
+edition = "2021"
 
 links = "cryptsetup"
 build = "build.rs"
@@ -15,8 +15,8 @@ name = "libcryptsetup_sys"
 path = "lib.rs"
 
 [dependencies]
-libc = "0.2.80"
+libc = "0.2.132"
 
 [build-dependencies]
-pkg-config = "0.3.19"
+pkg-config = "0.3.25"
 

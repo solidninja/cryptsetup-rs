@@ -5,7 +5,7 @@
 use std::boxed::Box;
 use std::error;
 use std::ffi;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::mem;
 use std::path::Path;
@@ -16,7 +16,6 @@ use std::sync::Once;
 
 use errno;
 use libc;
-use serde::export::Formatter;
 use uuid::Uuid;
 
 use blkid_rs;
@@ -314,7 +313,7 @@ fn generic_format(
 ) -> Result<()> {
     let c_cipher = ffi::CString::new(cipher).unwrap();
     let c_cipher_mode = ffi::CString::new(cipher_mode).unwrap();
-    let c_uuid = maybe_uuid.map(|uuid| ffi::CString::new(uuid.to_hyphenated().to_string()).unwrap());
+    let c_uuid = maybe_uuid.map(|uuid| ffi::CString::new(uuid.hyphenated().to_string()).unwrap());
 
     let c_luks_type = ffi::CString::new(type_.to_str()).unwrap();
     let c_uuid_ptr = c_uuid.as_ref().map(|u| u.as_ptr()).unwrap_or(ptr::null());

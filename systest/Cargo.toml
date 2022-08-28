@@ -1,11 +1,11 @@
 [package]
 name = "systest"
-version = "0.3.0-beta1"
+version = "0.3.0-beta3"
 authors = ["Vladimir Lushnikov <vladimir@solidninja.is>"]
 license = "LGPL-3.0"
 description = "FFI bindings to the libcryptsetup library"
 homepage = "https://gitlab.com/solidninja/cryptsetup-rs"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 libcryptsetup-sys = { path = "../libcryptsetup-sys" }
